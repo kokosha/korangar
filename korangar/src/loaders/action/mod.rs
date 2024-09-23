@@ -104,17 +104,17 @@ impl Actions {
         // fixed remove set_start_time in MouseCursor.
 
         let fs = &a.motions[frame as usize % a.motions.len()];
-        let pos = fs.sprite_clip_count as usize -1;
+        let pos = fs.sprite_clip_count as usize - 1;
         let texture = &sprite.textures[fs.sprite_clips[pos].sprite_number as usize];
         let texture_size = texture.get_extend();
         let offset = fs.sprite_clips[pos].position.map(|component| component as f32);
         (
             texture,
-            Vector2::new(offset.x, offset.y + (texture_size.height as f32) / 2.0)/10.0,
+            Vector2::new(offset.x, offset.y + (texture_size.height as f32) / 2.0) / 10.0,
             fs.sprite_clips[pos].mirror_on != 0,
         )
     }
-    
+
     pub fn render2<T>(
         &self,
         render_target: &mut T::Target,

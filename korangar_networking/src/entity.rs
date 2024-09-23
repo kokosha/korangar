@@ -60,7 +60,7 @@ impl From<EntityAppeared2Packet> for EntityData {
             health_points: packet.health_points,
             maximum_health_points: packet.maximum_health_points,
             head_direction: packet.head_direction as usize,
-            sex: packet.sex, 
+            sex: packet.sex,
             head: packet.head,
         }
     }

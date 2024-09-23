@@ -21,7 +21,7 @@ pub struct Sprite {
     #[hidden_element]
     pub textures: Vec<Arc<Texture>>,
     #[hidden_element]
-    pub rgba_images: Vec<RgbaImageData>, 
+    pub rgba_images: Vec<RgbaImageData>,
     #[cfg(feature = "debug")]
     sprite_data: SpriteData,
 }
@@ -121,7 +121,11 @@ impl SpriteLoader {
             })
             .collect();
 
-        let rgba_images = sprite_data.palette_image_data.clone().into_iter().map(|image_data| {
+        let rgba_images = sprite_data
+            .palette_image_data
+            .clone()
+            .into_iter()
+            .map(|image_data| {
                 // decode palette image data if necessary
                 let data: Vec<u8> = image_data
                     .data
@@ -129,14 +133,15 @@ impl SpriteLoader {
                     .iter()
                     .flat_map(|palette_index| color_bytes(&palette.colors[*palette_index as usize], *palette_index))
                     .collect();
-    
+
                 RgbaImageData {
                     width: image_data.width,
                     height: image_data.height,
                     data,
                 }
-            }).collect();
-    
+            })
+            .collect();
+
         let sprite = Arc::new(Sprite {
             textures,
             rgba_images,
