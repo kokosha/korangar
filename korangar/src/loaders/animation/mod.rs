@@ -171,7 +171,6 @@ pub struct FramePart{
     pub attach_point_y: i32,
     pub attach_point_parent_x: i32,
     pub attach_point_parent_y: i32,  
-
     pub mirror: bool,
 }
 

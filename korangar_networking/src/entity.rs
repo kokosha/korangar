@@ -13,7 +13,6 @@ pub struct EntityData {
     pub sex: Sex,
     // sprites information
     pub head: u16,
-
 }
 
 impl EntityData {
@@ -28,7 +27,7 @@ impl EntityData {
             maximum_health_points: character_information.maximum_health_points as i32,
             head_direction: 0, // TODO: get correct rotation
             sex: character_information.sex,
-            head: character_information.head,
+            head: character_information.head as u16,
         }
     }
 }
@@ -61,7 +60,7 @@ impl From<EntityAppeared2Packet> for EntityData {
             health_points: packet.health_points,
             maximum_health_points: packet.maximum_health_points,
             head_direction: packet.head_direction as usize,
-            sex: packet.sex,
+            sex: packet.sex, 
             head: packet.head,
         }
     }

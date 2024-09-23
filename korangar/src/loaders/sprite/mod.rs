@@ -79,7 +79,6 @@ impl SpriteLoader {
             [palette.red, palette.green, palette.blue, alpha]
         }
 
-
         let palette_images = sprite_data.palette_image_data.clone().into_iter().map(|image_data| {
             // decode palette image data if necessary
             let data: Vec<u8> = image_data

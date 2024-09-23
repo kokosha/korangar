@@ -1,4 +1,5 @@
 mod action;
+mod animation;
 mod archive;
 pub mod client;
 mod effect;
@@ -11,10 +12,9 @@ mod script;
 mod server;
 mod sprite;
 mod texture;
-mod animation;
-
 
 pub use self::action::*;
+pub use self::animation::*;
 pub use self::effect::{EffectHolder, EffectLoader, *};
 pub use self::font::{FontLoader, FontSize, Scaling};
 pub use self::gamefile::*;
@@ -24,4 +24,3 @@ pub use self::script::{ResourceMetadata, ScriptLoader};
 pub use self::server::{load_client_info, ClientInfo, ServiceId};
 pub use self::sprite::*;
 pub use self::texture::TextureLoader;
-pub use self::animation::*;
