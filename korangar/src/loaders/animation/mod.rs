@@ -54,7 +54,10 @@ impl AnimationLoader {
                     let offset = motion.sprite_clips[pos].position.map(|component| component);
                     let mirror = motion.sprite_clips[pos].mirror_on != 0;
 
-                    let mut has_attach_point = motion.attach_point_count.unwrap() == 1;
+                    let mut has_attach_point = match motion.attach_point_count {
+                                            Some(value) => value == 1,
+                                            None => false,
+                    };
                     let mut attach_point_x = 0;
                     let mut attach_point_y = 0;
 
