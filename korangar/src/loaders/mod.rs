@@ -11,6 +11,8 @@ mod script;
 mod server;
 mod sprite;
 mod texture;
+mod animation;
+
 
 pub use self::action::*;
 pub use self::effect::{EffectHolder, EffectLoader, *};
@@ -22,3 +24,4 @@ pub use self::script::{ResourceMetadata, ScriptLoader};
 pub use self::server::{load_client_info, ClientInfo, ServiceId};
 pub use self::sprite::*;
 pub use self::texture::TextureLoader;
+pub use self::animation::*;

@@ -1,10 +1,19 @@
-use cgmath::{Array, EuclideanSpace, Matrix4, Point3, SquareMatrix, Vector2, Vector3};
-use collision::{Aabb3, Frustum, Relation};
+#[cfg(feature = "debug")]
+use std::collections::HashSet;
+
+#[cfg(feature = "debug")]
+use cgmath::EuclideanSpace;
+use cgmath::{Array, Matrix4, SquareMatrix, Vector2, Vector3};
 use derive_new::new;
 #[cfg(feature = "debug")]
 use korangar_debug::profiling::Profiler;
 #[cfg(feature = "debug")]
 use korangar_interface::windows::PrototypeWindow;
+use korangar_util::collision::{Compacted, Frustum, QuadTree, AABB};
+#[cfg(feature = "debug")]
+use korangar_util::container::SimpleKey;
+use korangar_util::container::SimpleSlab;
+use korangar_util::create_simple_key;
 #[cfg(feature = "debug")]
 use option_ext::OptionExt;
 #[cfg(feature = "debug")]
@@ -19,6 +28,8 @@ use crate::graphics::*;
 #[cfg(feature = "debug")]
 use crate::interface::application::InterfaceSettings;
 use crate::world::*;
+
+create_simple_key!(ObjectKey, "Key to an object inside the map");
 
 fn average_tile_height(tile: &Tile) -> f32 {
     (tile.upper_left_height + tile.upper_right_height + tile.lower_left_height + tile.lower_right_height) / 4.0
@@ -82,7 +93,7 @@ pub fn get_light_direction(day_timer: f32) -> Vector3<f32> {
 #[cfg(feature = "debug")]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MarkerIdentifier {
-    Object(usize),
+    Object(u32),
     LightSource(usize),
     SoundSource(usize),
     EffectSource(usize),
@@ -105,12 +116,14 @@ pub struct Map {
     ground_vertex_buffer: Buffer<ModelVertex>,
     water_vertex_buffer: Option<Buffer<WaterVertex>>,
     ground_textures: TextureGroup,
-    objects: Vec<Object>,
+    objects: SimpleSlab<ObjectKey, Object>,
     light_sources: Vec<LightSource>,
     sound_sources: Vec<SoundSource>,
     effect_sources: Vec<EffectSource>,
     tile_picker_vertex_buffer: Buffer<TileVertex>,
     tile_vertex_buffer: Buffer<ModelVertex>,
+    quad_tree: QuadTree<ObjectKey, AABB, Compacted>,
+    bgm_track_name: Option<String>,
     #[cfg(feature = "debug")]
     map_data: MapData,
 }
@@ -132,6 +145,10 @@ impl Map {
     // TODO: Make this private once path finding is properly implemented
     pub fn get_tile(&self, position: Vector2<usize>) -> &Tile {
         &self.tiles[position.x + position.y * self.width]
+    }
+
+    pub fn bgm_track_name(&self) -> Option<&str> {
+        self.bgm_track_name.as_deref()
     }
 
     #[cfg_attr(feature = "debug", korangar_debug::profile)]
@@ -165,39 +182,35 @@ impl Map {
         camera: &dyn Camera,
         client_tick: ClientTick,
         time: f32,
+        frustum_query_result: &mut Vec<ObjectKey>,
         #[cfg(feature = "debug")] frustum_culling: bool,
     ) where
         T: Renderer + GeometryRenderer,
     {
+        #[cfg(feature = "debug")]
+        let culling_measurement = Profiler::start_measurement("frustum culling");
+
         let (view_matrix, projection_matrix) = camera.view_projection_matrices();
-        let frustum = Frustum::from_matrix4(projection_matrix * view_matrix).unwrap();
-        let standard_box = OrientedBox::default();
+        let frustum = Frustum::new(projection_matrix * view_matrix);
 
-        for object in &self.objects {
-            #[cfg(feature = "debug")]
-            if !frustum_culling {
+        frustum_query_result.clear();
+        self.quad_tree.query(&frustum, frustum_query_result);
+
+        #[cfg(feature = "debug")]
+        culling_measurement.stop();
+
+        #[cfg(feature = "debug")]
+        if !frustum_culling {
+            self.objects.iter().for_each(|(_, object)| {
                 object.render_geometry(render_target, render_pass, renderer, camera, client_tick, time);
-                continue;
+            });
+            return;
+        }
+
+        for object_key in frustum_query_result.iter().copied() {
+            if let Some(object) = self.objects.get(object_key) {
+                object.render_geometry(render_target, render_pass, renderer, camera, client_tick, time);
             }
-
-            #[cfg(feature = "debug")]
-            let culling_measurement = Profiler::start_measurement("frustum culling");
-
-            let bounding_box_matrix = object.get_bounding_box_matrix();
-            let oriented_bounding_box = standard_box.transform(bounding_box_matrix);
-            let bounding_box = BoundingBox::new(oriented_bounding_box.corners);
-            let collision_bounding_box = Aabb3 {
-                min: Point3::from_vec(bounding_box.smallest),
-                max: Point3::from_vec(bounding_box.biggest),
-            };
-            let culled = matches!(frustum.contains(&collision_bounding_box), Relation::Out);
-
-            #[cfg(feature = "debug")]
-            culling_measurement.stop();
-
-            if !culled {
-                object.render_geometry(render_target, render_pass, renderer, camera, client_tick, time);
-            };
         }
     }
 
@@ -229,32 +242,35 @@ impl Map {
         camera: &dyn Camera,
         player_camera: &dyn Camera,
         frustum_culling: bool,
+        frustum_query_result: &mut Vec<ObjectKey>,
     ) {
         let (view_matrix, projection_matrix) = player_camera.view_projection_matrices();
-        let frustum = Frustum::from_matrix4(projection_matrix * view_matrix).unwrap();
-        let standard_box = OrientedBox::default();
+        let frustum = Frustum::new(projection_matrix * view_matrix);
 
-        for object in &self.objects {
+        frustum_query_result.clear();
+        self.quad_tree.query(&frustum, frustum_query_result);
+
+        let mut intersection_set = HashSet::new();
+        frustum_query_result.iter().for_each(|&key| {
+            intersection_set.insert(key);
+        });
+
+        self.objects.iter().for_each(|(object_key, object)| {
             let bounding_box_matrix = object.get_bounding_box_matrix();
-            let oriented_bounding_box = standard_box.transform(bounding_box_matrix);
-            let bounding_box = BoundingBox::new(oriented_bounding_box.corners);
-            let collision_bounding_box = Aabb3 {
-                min: Point3::from_vec(bounding_box.smallest),
-                max: Point3::from_vec(bounding_box.biggest),
-            };
-            let culled = matches!(frustum.contains(&collision_bounding_box), Relation::Out);
+            let bounding_box = AABB::from_transformation_matrix(bounding_box_matrix);
+            let intersects = intersection_set.contains(&object_key);
 
-            let color = match !frustum_culling || !culled {
+            let color = match !frustum_culling || intersects {
                 true => Color::rgb_u8(255, 255, 0),
                 false => Color::rgb_u8(255, 0, 255),
             };
 
             let offset = bounding_box.size().y / 2.0;
             let position = bounding_box.center() - Vector3::new(0.0, offset, 0.0);
-            let transform = Transform::position(position);
+            let transform = Transform::position(position.to_vec());
 
             renderer.render_bounding_box(render_target, render_pass, camera, &transform, &bounding_box, color);
-        }
+        });
     }
 
     #[cfg_attr(feature = "debug", korangar_debug::profile)]
@@ -417,7 +433,7 @@ impl Map {
         marker_identifier: MarkerIdentifier,
     ) -> &dyn PrototypeWindow<InterfaceSettings> {
         match marker_identifier {
-            MarkerIdentifier::Object(index) => &self.objects[index],
+            MarkerIdentifier::Object(key) => self.objects.get(ObjectKey::new(key)).unwrap(),
             MarkerIdentifier::LightSource(index) => &self.light_sources[index],
             MarkerIdentifier::SoundSource(index) => &self.sound_sources[index],
             MarkerIdentifier::EffectSource(index) => &self.effect_sources[index],
@@ -442,8 +458,8 @@ impl Map {
         T: Renderer + MarkerRenderer,
     {
         if render_settings.show_object_markers {
-            self.objects.iter().enumerate().for_each(|(index, object)| {
-                let marker_identifier = MarkerIdentifier::Object(index);
+            self.objects.iter().for_each(|(object_key, object)| {
+                let marker_identifier = MarkerIdentifier::Object(object_key.key());
 
                 object.render_marker(
                     render_target,
@@ -528,7 +544,12 @@ impl Map {
         marker_identifier: MarkerIdentifier,
     ) {
         match marker_identifier {
-            MarkerIdentifier::Object(index) => self.objects[index].render_bounding_box(render_target, render_pass, renderer, camera),
+            MarkerIdentifier::Object(key) => {
+                self.objects
+                    .get(ObjectKey::new(key))
+                    .unwrap()
+                    .render_bounding_box(render_target, render_pass, renderer, camera)
+            }
             MarkerIdentifier::LightSource(_index) => {}
             MarkerIdentifier::SoundSource(_index) => {}
             MarkerIdentifier::EffectSource(_index) => {}

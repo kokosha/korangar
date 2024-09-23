@@ -10,13 +10,13 @@
 #![feature(unsized_const_params)]
 #![feature(variant_count)]
 
+mod graphics;
 mod input;
 #[macro_use]
-mod system;
-mod graphics;
 mod interface;
 mod inventory;
 mod loaders;
+mod system;
 mod world;
 
 use std::cell::RefCell;
@@ -27,6 +27,7 @@ use std::sync::Arc;
 
 use cgmath::{Vector2, Vector3};
 use image::{EncodableLayout, ImageFormat, ImageReader};
+use korangar_audio::AudioEngine;
 #[cfg(feature = "debug")]
 use korangar_debug::logging::{print_debug, Colorize};
 #[cfg(feature = "debug")]
@@ -45,6 +46,7 @@ use ragnarok_packets::{
     BuyShopItemsResult, CharacterId, CharacterInformation, CharacterServerInformation, Friend, HotbarSlot, SellItemsResult, SkillId,
     SkillType, TilePosition, UnitId, WorldPosition,
 };
+use rayon::in_place_scope;
 use wgpu::{CommandEncoderDescriptor, Features, Instance, InstanceFlags, Limits, Maintain, MemoryHints, TextureViewDescriptor};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoop;
@@ -82,6 +84,8 @@ korangar_debug::create_profiler_threads!(threads, {
 
 fn main() {
     const DEFAULT_MAP: &str = "geffen";
+    const DEFAULT_BGM: Option<&str> = Some("bgm\\01.mp3");
+    const MAIN_MENU_CLICK_SFX: &str = "¹öÆ°¼Ò¸®.wav";
 
     // We start a frame so that functions trying to start a measurement don't panic.
     #[cfg(feature = "debug")]
@@ -99,6 +103,10 @@ fn main() {
             _statement_timer.stop();
         }
     }
+
+    time_phase!("create global thread pool", {
+        rayon::ThreadPoolBuilder::new().num_threads(3).build_global().unwrap();
+    });
 
     time_phase!("create window", {
         // TODO: move this somewhere else
@@ -214,24 +222,30 @@ fn main() {
         print_debug!("received {} and {}", "queue".magenta(), "device".magenta());
     });
 
-    time_phase!("create resource managers", {
-        std::fs::create_dir_all("client/themes").unwrap();
-
-        let mut game_file_loader = GameFileLoader::default();
+    time_phase!("create game file loader", {
+        let game_file_loader = Arc::new(GameFileLoader::default());
 
         game_file_loader.load_archives_from_settings();
         game_file_loader.load_patched_lua_files();
+    });
 
-        let font_loader = Rc::new(RefCell::new(FontLoader::new(&device, queue.clone(), &mut game_file_loader)));
+    time_phase!("create audio engine", {
+        let audio_engine = Arc::new(AudioEngine::new(game_file_loader.clone()));
+    });
 
-        let mut model_loader = ModelLoader::new(device.clone(), queue.clone());
-        let mut texture_loader = TextureLoader::new(device.clone(), queue.clone());
-        let mut map_loader = MapLoader::new(device.clone(), queue.clone());
-        let mut sprite_loader = SpriteLoader::new(device.clone(), queue.clone());
-        let mut action_loader = ActionLoader::default();
-        let mut effect_loader = EffectLoader::default();
+    time_phase!("create resource managers", {
+        std::fs::create_dir_all("client/themes").unwrap();
+        let font_loader = Rc::new(RefCell::new(FontLoader::new(&device, queue.clone(), &game_file_loader)));
 
-        let script_loader = ScriptLoader::new(&mut game_file_loader).unwrap_or_else(|_| {
+        let mut model_loader = ModelLoader::new(device.clone(), queue.clone(), game_file_loader.clone());
+        let mut texture_loader = TextureLoader::new(device.clone(), queue.clone(), game_file_loader.clone());
+        let mut map_loader = MapLoader::new(device.clone(), queue.clone(), game_file_loader.clone(), audio_engine.clone());
+        let mut sprite_loader = SpriteLoader::new(device.clone(), queue.clone(), game_file_loader.clone());
+        let mut action_loader = ActionLoader::new(game_file_loader.clone());
+        let mut effect_loader = EffectLoader::new(game_file_loader.clone());
+        let mut animation_loader = AnimationLoader::new(device.clone(), queue.clone());
+
+        let script_loader = ScriptLoader::new(&game_file_loader).unwrap_or_else(|_| {
             // The scrip loader not being created correctly means that the lua files were
             // not valid. It's possible that the archive was copied from a
             // different machine with a different architecture, so the one thing
@@ -246,7 +260,7 @@ fn main() {
             game_file_loader.remove_patched_lua_files();
             game_file_loader.load_patched_lua_files();
 
-            ScriptLoader::new(&mut game_file_loader).unwrap()
+            ScriptLoader::new(&game_file_loader).unwrap()
         });
     });
 
@@ -258,26 +272,13 @@ fn main() {
     });
 
     time_phase!("create renderers", {
-        let mut deferred_renderer = DeferredRenderer::new(
-            device.clone(),
-            queue.clone(),
-            &mut game_file_loader,
-            &mut texture_loader,
-            surface.format(),
-            dimensions,
-        );
+        let mut deferred_renderer = DeferredRenderer::new(device.clone(), queue.clone(), &mut texture_loader, surface.format(), dimensions);
 
-        let mut interface_renderer = InterfaceRenderer::new(
-            device.clone(),
-            &mut game_file_loader,
-            &mut texture_loader,
-            font_loader.clone(),
-            dimensions,
-        );
+        let mut interface_renderer = InterfaceRenderer::new(device.clone(), &mut texture_loader, font_loader.clone(), dimensions);
 
         let mut picker_renderer = PickerRenderer::new(device.clone(), queue.clone(), dimensions);
 
-        let shadow_renderer = ShadowRenderer::new(device.clone(), queue.clone(), &mut game_file_loader, &mut texture_loader);
+        let shadow_renderer = ShadowRenderer::new(device.clone(), queue.clone(), &mut texture_loader);
     });
 
     time_phase!("load settings", {
@@ -316,7 +317,7 @@ fn main() {
         let mut application = InterfaceSettings::load_or_default();
         let mut interface = Interface::new(surface.window_screen_size());
         let mut focus_state = FocusState::default();
-        let mut mouse_cursor = MouseCursor::new(&mut game_file_loader, &mut sprite_loader, &mut action_loader);
+        let mut mouse_cursor = MouseCursor::new(&mut sprite_loader, &mut action_loader);
         let mut dialog_system = DialogSystem::default();
         let mut show_interface = true;
     });
@@ -337,7 +338,7 @@ fn main() {
     });
 
     time_phase!("initialize networking", {
-        let client_info = load_client_info(&mut game_file_loader);
+        let client_info = load_client_info(&game_file_loader);
 
         #[cfg(not(feature = "debug"))]
         let mut networking_system = NetworkingSystem::spawn();
@@ -370,6 +371,8 @@ fn main() {
         let mut player_inventory = Inventory::default();
         let mut player_skill_tree = SkillTree::default();
         let mut hotbar = Hotbar::default();
+        let mut frustum_query_result: Vec<ObjectKey> = Vec::default();
+        let mut shadow_query_result: Vec<ObjectKey> = Vec::default();
 
         let welcome_string = format!(
             "Welcome to ^ffff00★^000000 ^ff8800Korangar^000000 ^ffff00★^000000 version ^ff8800{}^000000!",
@@ -379,21 +382,15 @@ fn main() {
             text: welcome_string,
             color: MessageColor::Server,
         }]);
-    });
 
-    time_phase!("create thread pool", {
-        let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(3).build().unwrap();
+        let main_menu_click_sfx = audio_engine.load(MAIN_MENU_CLICK_SFX);
     });
 
     time_phase!("load default map", {
         let mut map = map_loader
-            .get(
-                DEFAULT_MAP.to_string(),
-                &mut game_file_loader,
-                &mut model_loader,
-                &mut texture_loader,
-            )
+            .get(DEFAULT_MAP.to_string(), &mut model_loader, &mut texture_loader)
             .expect("failed to load initial map");
+        audio_engine.play_bgm_track(DEFAULT_BGM);
     });
 
     event_loop.run(move |event, active_event_loop| {
@@ -522,6 +519,8 @@ fn main() {
                 for event in network_events {
                     match event {
                         NetworkEvent::LoginServerConnected { character_servers, login_data } => {
+                            audio_engine.play_sfx(main_menu_click_sfx);
+
                             saved_login_data = Some(login_data);
 
                             interface.close_all_windows_except(&mut focus_state);
@@ -529,6 +528,7 @@ fn main() {
                         }
                         NetworkEvent::LoginServerConnectionFailed { message, .. } => {
                             networking_system.disconnect_from_login_server();
+
                             interface.open_window(&application, &mut focus_state, &ErrorWindow::new(message.to_owned()));
                         }
                         NetworkEvent::LoginServerDisconnected { reason } => {
@@ -574,15 +574,16 @@ fn main() {
                             entities.clear();
                             particle_holder.clear();
                             effect_holder.clear();
+                            audio_engine.play_bgm_track(None);
 
                             map = map_loader
                                 .get(
                                     DEFAULT_MAP.to_string(),
-                                    &mut game_file_loader,
                                     &mut model_loader,
                                     &mut texture_loader,
                                 )
                                 .expect("failed to load initial map");
+                            audio_engine.play_bgm_track(DEFAULT_BGM);
 
                             interface.close_all_windows_except(&mut focus_state);
 
@@ -595,6 +596,8 @@ fn main() {
                         },
                         NetworkEvent::AccountId(..) => {},
                         NetworkEvent::CharacterList { characters } => {
+                            audio_engine.play_sfx(main_menu_click_sfx);
+
                             saved_characters.set(characters);
                             let character_selection_window = CharacterSelectionWindow::new(saved_characters.new_remote(), move_request.new_remote(), saved_slot_count);
 
@@ -616,6 +619,8 @@ fn main() {
                             interface.open_window(&application, &mut focus_state, &ErrorWindow::new(message.to_owned()))
                         }
                         NetworkEvent::CharacterSelected { login_data, map_name } => {
+                            audio_engine.play_sfx(main_menu_click_sfx);
+
                             let saved_login_data = saved_login_data.as_ref().unwrap();
                             networking_system.disconnect_from_character_server();
                             networking_system.connect_to_map_server(saved_login_data, login_data);
@@ -630,18 +635,18 @@ fn main() {
                             map = map_loader
                                 .get(
                                     map_name,
-                                    &mut game_file_loader,
                                     &mut model_loader,
                                     &mut texture_loader,
                                 )
                                 .unwrap();
+                            audio_engine.play_bgm_track(map.bgm_track_name());
 
                             saved_player_name = character_information.name.clone();
 
                             let player = Player::new(
-                                &mut game_file_loader,
                                 &mut sprite_loader,
                                 &mut action_loader,
+                                &mut animation_loader,
                                 &script_loader,
                                 &map,
                                 saved_login_data.account_id,
@@ -694,9 +699,9 @@ fn main() {
                             entities.retain(|entity| entity.get_entity_id() != entity_appeared_data.entity_id);
 
                             let npc = Npc::new(
-                                &mut game_file_loader,
                                 &mut sprite_loader,
                                 &mut action_loader,
+                                &mut animation_loader,
                                 &script_loader,
                                 &map,
                                 entity_appeared_data,
@@ -735,11 +740,11 @@ fn main() {
                             map = map_loader
                                 .get(
                                     map_name,
-                                    &mut game_file_loader,
                                     &mut model_loader,
                                     &mut texture_loader,
                                 )
                                 .unwrap();
+                            audio_engine.play_bgm_track(map.bgm_track_name());
 
                             let player_position = Vector2::new(player_position.x as usize, player_position.y as usize);
                             entities[0].set_position(&map, player_position, client_tick);
@@ -810,17 +815,16 @@ fn main() {
                         NetworkEvent::AddCloseButton => dialog_system.add_close_button(),
                         NetworkEvent::AddChoiceButtons(choices) => dialog_system.add_choice_buttons(choices),
                         NetworkEvent::AddQuestEffect(quest_effect) => {
-                            particle_holder.add_quest_icon(&mut game_file_loader, &mut texture_loader, &map, quest_effect)
+                            particle_holder.add_quest_icon(&mut texture_loader, &map, quest_effect)
                         }
                         NetworkEvent::RemoveQuestEffect(entity_id) => particle_holder.remove_quest_icon(entity_id),
                         NetworkEvent::SetInventory { items } => {
-                            player_inventory.fill(&mut game_file_loader, &mut texture_loader, &script_loader, items);
+                            player_inventory.fill(&mut texture_loader, &script_loader, items);
                         }
                         NetworkEvent::IventoryItemAdded {
                             item
                         }=> {
                             player_inventory.add_item(
-                                &mut game_file_loader,
                                 &mut texture_loader,
                                 &script_loader,
                                 item,
@@ -836,7 +840,7 @@ fn main() {
                             );
                         }
                         NetworkEvent::SkillTree(skill_information) => {
-                            player_skill_tree.fill(&mut game_file_loader, &mut sprite_loader, &mut action_loader, skill_information);
+                            player_skill_tree.fill(&mut sprite_loader, &mut action_loader, skill_information);
                         }
                         NetworkEvent::UpdateEquippedPosition { index, equipped_position } => {
                             player_inventory.update_equipped_position(index, equipped_position);
@@ -849,7 +853,7 @@ fn main() {
                             // request a full list of items and the hotbar.
 
                             entity.set_job(job_id as usize);
-                            entity.reload_sprite(&mut game_file_loader, &mut sprite_loader, &mut action_loader, &script_loader);
+                            entity.reload_sprite(&mut sprite_loader, &mut action_loader, &mut animation_loader, &script_loader);
                         }
                         NetworkEvent::LoggedOut => {
                             networking_system.disconnect_from_map_server();
@@ -864,7 +868,7 @@ fn main() {
                             friend_list.push((friend, LinkedElement::new()));
                         }
                         NetworkEvent::VisualEffect(path, entity_id) => {
-                            let effect = effect_loader.get(path, &mut game_file_loader, &mut texture_loader).unwrap();
+                            let effect = effect_loader.get(path, &mut texture_loader).unwrap();
                             let frame_timer = effect.new_frame_timer();
 
                             effect_holder.add_effect(Box::new(EffectWithLight::new(
@@ -883,7 +887,7 @@ fn main() {
                                 let position = Vector2::new(position.x as usize, position.y as usize);
                                 let position = map.get_world_position(position);
                                 let effect = effect_loader
-                                    .get("firewall.str", &mut game_file_loader, &mut texture_loader)
+                                    .get("firewall.str", &mut texture_loader)
                                     .unwrap();
                                 let frame_timer = effect.new_frame_timer();
 
@@ -905,7 +909,7 @@ fn main() {
                                 let position = Vector2::new(position.x as usize, position.y as usize);
                                 let position = map.get_world_position(position);
                                 let effect = effect_loader
-                                    .get("pneuma1.str", &mut game_file_loader, &mut texture_loader)
+                                    .get("pneuma1.str", &mut texture_loader)
                                     .unwrap();
                                 let frame_timer = effect.new_frame_timer();
 
@@ -957,7 +961,7 @@ fn main() {
                         }
                         NetworkEvent::OpenShop { items } => {
                             shop_items.mutate(|shop_items| *shop_items = items.into_iter().map(|item| {
-                                script_loader.load_market_item_metadata(&mut game_file_loader, &mut texture_loader, item)
+                                script_loader.load_market_item_metadata(&mut texture_loader, item)
                             }).collect());
 
                             let cart = PlainTrackedState::default();
@@ -1465,6 +1469,15 @@ fn main() {
                 };
 
                 #[cfg(feature = "debug")]
+                let frame_measurement = Profiler::start_measurement("update audio engine");
+
+                audio_engine.set_ambient_listener(current_camera.focus_point(), current_camera.view_direction(), current_camera.look_up_vector());
+                audio_engine.update();
+
+                #[cfg(feature = "debug")]
+                frame_measurement.stop();
+
+                #[cfg(feature = "debug")]
                 let prepare_frame_measurement = Profiler::start_measurement("prepare frame");
 
                 #[cfg(feature = "debug")]
@@ -1524,7 +1537,7 @@ fn main() {
                 #[cfg(feature = "debug")]
                 prepare_frame_measurement.stop();
 
-                thread_pool.in_place_scope(|scope| {
+                in_place_scope(|scope| {
                     scope.spawn(|_| {
                         #[cfg(feature = "debug")]
                         let _measurement = threads::Picker::start_frame();
@@ -1568,6 +1581,7 @@ fn main() {
                             &directional_shadow_camera,
                             client_tick,
                             animation_timer,
+                            &mut shadow_query_result,
                             #[cfg(feature = "debug")]
                             render_settings.frustum_culling,
                         );
@@ -1617,6 +1631,7 @@ fn main() {
                             current_camera,
                             client_tick,
                             animation_timer,
+                            &mut frustum_query_result,
                             #[cfg(feature = "debug")]
                             render_settings.frustum_culling,
                         );
@@ -1686,6 +1701,7 @@ fn main() {
                                 current_camera,
                                 &player_camera,
                                 render_settings.frustum_culling,
+                                &mut frustum_query_result,
                             );
                         }
 

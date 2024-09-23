@@ -5,6 +5,7 @@ use derive_new::new;
 #[cfg(feature = "debug")]
 use korangar_debug::logging::{print_debug, Colorize, Timer};
 use korangar_interface::elements::PrototypeElement;
+use korangar_util::FileLoader;
 use ragnarok_bytes::{ByteStream, FromBytes};
 use ragnarok_formats::sprite::{PaletteColor, RgbaImageData, SpriteData};
 use ragnarok_formats::version::InternalVersion;
@@ -19,6 +20,8 @@ use crate::loaders::GameFileLoader;
 pub struct Sprite {
     #[hidden_element]
     pub textures: Vec<Arc<Texture>>,
+    #[hidden_element]
+    pub rgba_images: Vec<RgbaImageData>, 
     #[cfg(feature = "debug")]
     sprite_data: SpriteData,
 }
@@ -27,16 +30,20 @@ pub struct Sprite {
 pub struct SpriteLoader {
     device: Arc<Device>,
     queue: Arc<Queue>,
+    game_file_loader: Arc<GameFileLoader>,
     #[new(default)]
     cache: HashMap<String, Arc<Sprite>>,
 }
 
 impl SpriteLoader {
-    fn load(&mut self, path: &str, game_file_loader: &mut GameFileLoader) -> Result<Arc<Sprite>, LoadError> {
+    fn load(&mut self, path: &str) -> Result<Arc<Sprite>, LoadError> {
         #[cfg(feature = "debug")]
         let timer = Timer::new_dynamic(format!("load sprite from {}", path.magenta()));
 
-        let bytes = game_file_loader.get(&format!("data\\sprite\\{path}")).map_err(LoadError::File)?;
+        let bytes = self
+            .game_file_loader
+            .get(&format!("data\\sprite\\{path}"))
+            .map_err(LoadError::File)?;
         let mut byte_stream: ByteStream<Option<InternalVersion>> = ByteStream::without_metadata(&bytes);
 
         let sprite_data = match SpriteData::from_bytes(&mut byte_stream) {
@@ -48,7 +55,7 @@ impl SpriteLoader {
                     print_debug!("Replacing with fallback");
                 }
 
-                return self.get(FALLBACK_SPRITE_FILE, game_file_loader);
+                return self.get(FALLBACK_SPRITE_FILE);
             }
         };
 
@@ -72,7 +79,8 @@ impl SpriteLoader {
             [palette.red, palette.green, palette.blue, alpha]
         }
 
-        let palette_images = sprite_data.palette_image_data.into_iter().map(|image_data| {
+
+        let palette_images = sprite_data.palette_image_data.clone().into_iter().map(|image_data| {
             // decode palette image data if necessary
             let data: Vec<u8> = image_data
                 .data
@@ -114,8 +122,25 @@ impl SpriteLoader {
             })
             .collect();
 
+        let rgba_images = sprite_data.palette_image_data.clone().into_iter().map(|image_data| {
+                // decode palette image data if necessary
+                let data: Vec<u8> = image_data
+                    .data
+                    .0
+                    .iter()
+                    .flat_map(|palette_index| color_bytes(&palette.colors[*palette_index as usize], *palette_index))
+                    .collect();
+    
+                RgbaImageData {
+                    width: image_data.width,
+                    height: image_data.height,
+                    data,
+                }
+            }).collect();
+    
         let sprite = Arc::new(Sprite {
             textures,
+            rgba_images,
             #[cfg(feature = "debug")]
             sprite_data: cloned_sprite_data,
         });
@@ -128,10 +153,10 @@ impl SpriteLoader {
         Ok(sprite)
     }
 
-    pub fn get(&mut self, path: &str, game_file_loader: &mut GameFileLoader) -> Result<Arc<Sprite>, LoadError> {
+    pub fn get(&mut self, path: &str) -> Result<Arc<Sprite>, LoadError> {
         match self.cache.get(path) {
             Some(sprite) => Ok(sprite.clone()),
-            None => self.load(path, game_file_loader),
+            None => self.load(path),
         }
     }
 }
