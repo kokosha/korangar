@@ -69,7 +69,7 @@ impl MapLoader {
     ) -> Result<Arc<Map>, LoadError> {
         #[cfg(feature = "debug")]
         let timer = Timer::new_dynamic(format!("load map from {}", &resource_file));
-
+        
         let map_file_name = format!("data\\{}.rsw", resource_file);
         let mut map_data: MapData = parse_generic_data(&map_file_name, &self.game_file_loader)?;
 

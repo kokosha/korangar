@@ -1,3 +1,4 @@
+use std::fmt;
 use std::string::String;
 use std::sync::Arc;
 
@@ -63,11 +64,25 @@ pub enum EntityType {
     Npc,
     Monster,
 }
+impl fmt::Display for EntityType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            EntityType::Warp => write!(f, "{:?}", "Warp"),
+            EntityType::Hidden => write!(f, "{:?}", "Hidden"),
+            EntityType::Player => write!(f, "{:?}", "Player"),
+            EntityType::Npc => write!(f, "{:?}", "Npc"),
+            EntityType::Monster => write!(f, "{:?}", "Monster"),
+        } 
+    }
+}
+
+
 
 #[derive(PrototypeElement)]
 pub struct Common {
     pub entity_id: EntityId,
     pub job_id: usize,
+    pub head_id: usize,
     pub health_points: usize,
     pub maximum_health_points: usize,
     pub movement_speed: usize,
@@ -240,7 +255,7 @@ fn get_sprite_path_for_player_job(job_id: usize) -> &'static str {
 // This part instead of generating the sprite and actions, you need to generate
 // the animation_loader.
 
-fn get_entity_filename(script_loader: &ScriptLoader, entity_type: EntityType, job_id: usize, sex: Sex) -> Vec<String> {
+fn get_entity_filename(script_loader: &ScriptLoader, entity_type: EntityType, job_id: usize, head_id: usize, sex: Sex) -> Vec<String> {
     let sex_sprite_path = match sex == Sex::Female {
         true => "¿©",
         false => "³²",
@@ -257,10 +272,10 @@ fn get_entity_filename(script_loader: &ScriptLoader, entity_type: EntityType, jo
         format!("ÀÎ°£Á·\\¸Ó¸®Åë\\{}\\{}_{}", sex_sprite_path, head_id, sex_sprite_path)
     }
     let entity_filename = match entity_type {
-        EntityType::Player => vec![player_body_path(sex_sprite_path, job_id), player_head_path(sex_sprite_path, 32)],
+        EntityType::Player => vec![player_body_path(sex_sprite_path, job_id), player_head_path(sex_sprite_path, head_id+1)],
         EntityType::Npc => vec![format!("npc\\{}", script_loader.get_job_name_from_id(job_id))],
         EntityType::Monster => vec![format!("¸ó½ºÅÍ\\{}", script_loader.get_job_name_from_id(job_id))],
-        EntityType::Warp | EntityType::Hidden => vec![format!("npc\\{}", script_loader.get_job_name_from_id(job_id))], // TODO: change
+        EntityType::Warp | EntityType::Hidden => vec![format!("npc\\{}", script_loader.get_job_name_from_id(job_id))]
     };
 
     entity_filename
@@ -278,6 +293,7 @@ impl Common {
     ) -> Self {
         let entity_id = entity_data.entity_id;
         let job_id = entity_data.job as usize;
+        let head_id = entity_data.head as usize;
         let grid_position = entity_data.position;
         let grid_position = Vector2::new(grid_position.x, grid_position.y);
         let position = map.get_world_position(grid_position);
@@ -300,9 +316,9 @@ impl Common {
             _ => EntityType::Npc,
         };
 
-        let entity_filename: Vec<String> = get_entity_filename(script_loader, entity_type, job_id, sex);
+        let entity_filename: Vec<String> = get_entity_filename(script_loader, entity_type, job_id, head_id, sex);
         // generate animation
-        let animation_data = animation_loader.get_animation_data(sprite_loader, action_loader, entity_filename);
+        let animation_data = animation_loader.get_animation_data(sprite_loader, action_loader, entity_filename, entity_type);
 
         let details = ResourceState::Unavailable;
         let animation_state = AnimationState::new(client_tick);
@@ -312,6 +328,7 @@ impl Common {
             position,
             entity_id,
             job_id,
+            head_id,
             head_direction,
             sex,
             active_movement,
@@ -340,9 +357,8 @@ impl Common {
         animation_loader: &mut AnimationLoader,
         script_loader: &ScriptLoader,
     ) {
-        let entity_filename: Vec<String> = get_entity_filename(script_loader, self.entity_type, self.job_id, self.sex);
-
-        self.animation_data = animation_loader.get_animation_data(sprite_loader, action_loader, entity_filename);
+        let entity_filename: Vec<String> = get_entity_filename(script_loader, self.entity_type, self.job_id, self.head_id, self.sex);
+        self.animation_data = animation_loader.get_animation_data(sprite_loader, action_loader, entity_filename, self.entity_type);
     }
 
     pub fn set_position(&mut self, map: &Map, position: Vector2<usize>, client_tick: ClientTick) {
@@ -718,7 +734,7 @@ impl Common {
     where
         T: Renderer + EntityRenderer,
     {
-        if self.animation_data.animation_pair.len() == 1 {
+        /*if self.animation_data.animation_pair.len() == 1 {
             // TODO: Made everything using the animation, deprecate the texture from
             // SpriteLoader.
             for constructor in self.animation_data.animation_pair.iter() {
@@ -744,7 +760,7 @@ impl Common {
                     self.entity_id,
                 );
             }
-        } else {
+        } else {*/
             let camera_direction = camera.camera_direction();
             let (texture, mirror) = self
                 .animation_data
@@ -762,7 +778,7 @@ impl Common {
                 mirror,
                 self.entity_id,
             );
-        }
+        /* }*/
     }
 
     #[cfg(feature = "debug")]
@@ -1057,6 +1073,10 @@ impl Entity {
         self.get_common_mut().job_id = job_id;
     }
 
+    pub fn set_head(&mut self, head_id: usize) {
+        self.get_common_mut().head_id = head_id;
+    }
+
     pub fn reload_sprite(
         &mut self,
         sprite_loader: &mut SpriteLoader,
@@ -1091,6 +1111,15 @@ impl Entity {
     pub fn set_position(&mut self, map: &Map, position: Vector2<usize>, client_tick: ClientTick) {
         self.get_common_mut().set_position(map, position, client_tick);
     }
+
+    pub fn set_death(&mut self, client_tick: ClientTick) {
+        self.get_common_mut().animation_state.death(client_tick);
+    }
+
+    pub fn set_idle(&mut self, client_tick: ClientTick) {
+        self.get_common_mut().animation_state.idle(client_tick);
+    }
+
 
     pub fn update_health(&mut self, health_points: usize, maximum_health_points: usize) {
         let common = self.get_common_mut();

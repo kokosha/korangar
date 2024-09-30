@@ -58,6 +58,7 @@ pub enum NetworkEvent {
     MapServerDisconnected {
         reason: DisconnectReason,
     },
+    ResurrectPlayer(EntityId),
     /// Add an entity to the list of entities that the client is aware of.
     AddEntity(EntityData),
     /// Remove an entity from the list of entities that the client is aware of
@@ -104,7 +105,7 @@ pub enum NetworkEvent {
         index: InventoryIndex,
         equipped_position: EquipPosition,
     },
-    ChangeJob(AccountId, u32),
+    SpriteChange(AccountId, u8, u32),
     SetPlayerPosition(WorldPosition),
     LoggedOut,
     FriendRequest {

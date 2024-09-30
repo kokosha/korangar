@@ -49,11 +49,11 @@ impl FileLoader for GameFileLoader {
             .iter()
             .find_map(|archive| archive.get_file_by_path(&lowercase_path))
             .ok_or(FileNotFoundError::new(path.to_owned()));
-
+        
         // TODO: should this be removed in the future or left in for resilience?
         if result.is_err() {
             #[cfg(feature = "debug")]
-            print_debug!("failed to find file {}; tying to replace it with placeholder", path);
+            print_debug!("failed to find file {}; trying to replace it with placeholder", path);
 
             let delimiter_position = path.len() - 4;
             let extension = path[delimiter_position..].to_ascii_lowercase();

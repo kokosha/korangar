@@ -692,6 +692,12 @@ fn main() {
                         NetworkEvent::CharacterSlotSwitchFailed => {
                             interface.open_window(&application, &mut focus_state, &ErrorWindow::new("Failed to switch character slots".to_owned()));
                         },
+                        NetworkEvent::ResurrectPlayer(data) => {
+                            // Sometimes (like after a job change) the server will tell the client
+                            // that a new entity appeared, even though it was already on screen. So
+                            // to prevent the entity existing twice, we remove the old one.
+                            entities[0].set_idle(client_tick);
+                        }
                         NetworkEvent::AddEntity(entity_appeared_data) => {
                             // Sometimes (like after a job change) the server will tell the client
                             // that a new entity appeared, even though it was already on screen. So
@@ -712,7 +718,11 @@ fn main() {
                             entities.push(npc);
                         }
                         NetworkEvent::RemoveEntity(entity_id) => {
-                            entities.retain(|entity| entity.get_entity_id() != entity_id);
+                            if entities[0].get_entity_id() == entity_id {
+                                entities[0].set_death(client_tick);
+                            } else {
+                                entities.retain(|entity| entity.get_entity_id() != entity_id);
+                            }
                         }
                         NetworkEvent::EntityMove(entity_id, position_from, position_to, starting_timestamp) => {
                             let entity = entities.iter_mut().find(|entity| entity.get_entity_id() == entity_id);
@@ -845,14 +855,18 @@ fn main() {
                         NetworkEvent::UpdateEquippedPosition { index, equipped_position } => {
                             player_inventory.update_equipped_position(index, equipped_position);
                         }
-                        NetworkEvent::ChangeJob(account_id, job_id) => {
+                        NetworkEvent::SpriteChange(account_id, sprite_type, sprite_value) => {
                             let entity = entities.iter_mut().find(|entity| entity.get_entity_id().0 == account_id.0).unwrap();
 
                             // FIX: A job change does not automatically send packets for the
                             // inventory and for unequipping items. We should probably manually
                             // request a full list of items and the hotbar.
-
-                            entity.set_job(job_id as usize);
+                            if sprite_type == 0 {
+                                entity.set_job(sprite_value as usize);
+                            }
+                            if sprite_type == 1 {
+                                entity.set_head( sprite_value as usize);
+                            }
                             entity.reload_sprite(&mut sprite_loader, &mut action_loader, &mut animation_loader, &script_loader);
                         }
                         NetworkEvent::LoggedOut => {
