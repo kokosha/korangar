@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix, Vector4};
+use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 use derive_new::new;
 use korangar_interface::elements::PrototypeElement;
 use ragnarok_formats::model::RotationKeyframeData;
@@ -21,7 +21,7 @@ pub struct Node {
 }
 
 impl Node {
-    fn animaton_matrix(&self, client_tick: ClientTick) -> Matrix4<f32> {
+    fn animation_matrix(&self, client_tick: ClientTick) -> Matrix4<f32> {
         let last_step = self.rotation_keyframes.last().unwrap();
         let animation_tick = client_tick.0 % last_step.frame;
 
@@ -46,7 +46,26 @@ impl Node {
     pub fn world_matrix(&self, transform: &Transform, client_tick: ClientTick) -> Matrix4<f32> {
         let animation_rotation_matrix = match self.rotation_keyframes.is_empty() {
             true => Matrix4::identity(),
-            false => self.animaton_matrix(client_tick),
+            false => self.animation_matrix(client_tick),
+        };
+
+        let rotation_matrix = Matrix4::from_angle_z(-transform.rotation.z)
+            * Matrix4::from_angle_x(-transform.rotation.x)
+            * Matrix4::from_angle_y(transform.rotation.y);
+
+            Matrix4::from_translation(transform.position)
+            * rotation_matrix
+            * Matrix4::from_nonuniform_scale(transform.scale.x, -transform.scale.y, transform.scale.z)
+            * self.transform_matrix 
+            * animation_rotation_matrix
+            
+    }
+
+    #[cfg_attr(feature = "debug", korangar_debug::profile)]
+    pub fn world_matrix_2(&self, transform: &Transform, client_tick: ClientTick, transform_matrix: Matrix4<f32>) -> Matrix4<f32> {
+        let animation_rotation_matrix = match self.rotation_keyframes.is_empty() {
+            true => Matrix4::identity(),
+            false => self.animation_matrix(client_tick),
         };
 
         let rotation_matrix = Matrix4::from_angle_z(-transform.rotation.z)
@@ -55,14 +74,8 @@ impl Node {
 
         Matrix4::from_translation(transform.position)
             * rotation_matrix
-            * Matrix4::from_nonuniform_scale(transform.scale.x, transform.scale.y, transform.scale.z)
-            * Matrix4::from_cols(
-                Vector4::new(1.0, 0.0, 0.0, 0.0),
-                Vector4::new(0.0, -1.0, 0.0, 0.0),
-                Vector4::new(0.0, 0.0, 1.0, 0.0),
-                Vector4::new(0.0, 0.0, 0.0, 1.0),
-            )
-            * self.transform_matrix
+            * Matrix4::from_nonuniform_scale(transform.scale.x, -transform.scale.y, transform.scale.z)
+            * transform_matrix 
             * animation_rotation_matrix
     }
 
@@ -89,8 +102,48 @@ impl Node {
             time,
         );
 
+        /*self.child_nodes
+        .iter()
+        .for_each(|node| {
+            node.render_geometry(render_target, render_pass, renderer, camera, transform, client_tick, time)
+        }
+        );*/
+
+        /*self.child_nodes
+            .iter()
+            .for_each(|node| {
+                node.render_geometry_2(render_target, render_pass, renderer, camera, transform, client_tick, time, self.transform_matrix)
+            }
+        );*/
+    }
+    pub fn render_geometry_2<T>(
+        &self,
+        render_target: &mut T::Target,
+        render_pass: &mut RenderPass,
+        renderer: &T,
+        camera: &dyn Camera,
+        transform: &Transform,
+        client_tick: ClientTick,
+        time: f32,
+        transform_matrix: Matrix4<f32>,
+    ) where
+        T: Renderer + GeometryRenderer,
+    {
+        renderer.render_geometry(
+            render_target,
+            render_pass,
+            camera,
+            &self.vertex_buffer,
+            &self.textures,
+            self.world_matrix_2(transform, client_tick, transform_matrix),
+            time,
+        );
         self.child_nodes
             .iter()
-            .for_each(|node| node.render_geometry(render_target, render_pass, renderer, camera, transform, client_tick, time));
+            .for_each(|node| {
+                node.render_geometry_2(render_target, render_pass, renderer, camera, transform, client_tick, time, transform_matrix)
+            }
+        );
     }
+
 }

@@ -116,9 +116,36 @@ impl ModelLoader {
         native_vertices
     }
 
+    /*fn calculate_matrix1(node: &NodeData) {
+        let matrix1 = Matrix4::Identity;
+
+        // Need a place to find model version.
+        let version = 1.6;
+        if (version < 2.2) {
+            if(!node.parent) {
+                if(node.child.len() > 0) {
+                    matrix1 = matrix1 * Matrix4::from_translation(
+                    Vector3::new(
+                        -bounding_box.center().x,
+                        -bounding_box.max().y,
+                        -bounding_box.center().z,
+                    ));
+                }  else {
+                    matrix1 = matrix1 * Matrix4::from_translation(
+                        Vector3::new(0.0, -bounding_box.max().y + bounding_box.center().y, 0,0)
+                    );
+                }
+            } else {
+                matrix1 = matrix * Matrix4::from_translation(position);
+            }
+            
+        }
+    }*/
+
+
     fn calculate_matrices(node: &NodeData, parent_matrix: &Matrix4<f32>) -> (Matrix4<f32>, Matrix4<f32>, Matrix4<f32>) {
         let main = Matrix4::from_translation(node.translation1) * Matrix4::from(node.offset_matrix);
-
+        
         let scale_matrix = Matrix4::from_nonuniform_scale(node.scale.x, node.scale.y, node.scale.z);
         let rotation_matrix = Matrix4::from_axis_angle(node.rotation_axis, Rad(node.rotation_angle));
         let translation_matrix = Matrix4::from_translation(node.translation2);
@@ -127,9 +154,7 @@ impl ModelLoader {
             true => translation_matrix * scale_matrix,
             false => translation_matrix * rotation_matrix * scale_matrix,
         };
-
-        let box_transform = parent_matrix * translation_matrix * rotation_matrix * scale_matrix;
-
+        let box_transform = translation_matrix * rotation_matrix * scale_matrix * parent_matrix;
         (main, transform, box_transform)
     }
 
@@ -174,7 +199,6 @@ impl ModelLoader {
             }
             false => transform_matrix,
         };
-
         let node_textures: Vec<Arc<Texture>> = current_node
             .texture_indices
             .iter()

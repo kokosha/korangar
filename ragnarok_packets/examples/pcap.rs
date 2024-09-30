@@ -223,6 +223,7 @@ fn main() {
         EntityAppearedPacket,
         EntityAppeared2Packet,
         MovingEntityAppearedPacket,
+        ResurrectionPacket,
         EntityDisappearedPacket,
         UpdateStatusPacket,
         UpdateStatusPacket1,

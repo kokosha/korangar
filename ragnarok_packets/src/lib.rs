@@ -800,9 +800,9 @@ pub struct CriticalWeightUpdatePacket {
 #[header(0x01D7)]
 pub struct SpriteChangePacket {
     pub account_id: AccountId,
-    pub sprite_type: u8, // TODO: Is it actually the sprite type?
-    pub value: u32,
-    pub value2: u32,
+    pub sprite_type: u8,
+    pub new_value: u32,
+    pub old_value: u32,
 }
 
 #[derive(Debug, Clone, Packet, ServerPacket, MapServer)]
@@ -1545,6 +1545,15 @@ pub struct EntityAppeared2Packet {
     #[length(24)]
     pub name: String,
 }
+
+#[derive(Debug, Clone, Packet, ServerPacket, MapServer)]
+#[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
+#[header(0x0148)]
+pub struct ResurrectionPacket {
+    pub entity_id: EntityId,
+    pub p_type: u16,
+}
+
 
 #[derive(Clone, Copy, Debug, ByteConvertable, FixedByteSize)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]

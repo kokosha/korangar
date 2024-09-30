@@ -665,6 +665,7 @@ where
             NetworkEvent::PlayerMove(origin, destination, packet.timestamp)
         })?;
         packet_handler.register(|packet: ChangeMapPacket| NetworkEvent::ChangeMap(packet.map_name.replace(".gat", ""), packet.position))?;
+        packet_handler.register(|packet: ResurrectionPacket| NetworkEvent::ResurrectPlayer(packet.entity_id))?;
         packet_handler.register(|packet: EntityAppearedPacket| NetworkEvent::AddEntity(packet.into()))?;
         packet_handler.register(|packet: EntityAppeared2Packet| NetworkEvent::AddEntity(packet.into()))?;
         packet_handler.register(|packet: MovingEntityAppearedPacket| NetworkEvent::AddEntity(packet.into()))?;
@@ -679,7 +680,7 @@ where
         packet_handler.register_noop::<AchievementListPacket>()?;
         packet_handler.register_noop::<CriticalWeightUpdatePacket>()?;
         packet_handler.register(|packet: SpriteChangePacket| {
-            (packet.sprite_type == 0).then_some(NetworkEvent::ChangeJob(packet.account_id, packet.value))
+            NetworkEvent::SpriteChange( packet.account_id, packet.sprite_type, packet.new_value)
         })?;
         packet_handler.register({
             let inventory_items = inventory_items.clone();
