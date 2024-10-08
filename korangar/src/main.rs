@@ -724,17 +724,19 @@ fn main() {
                         NetworkEvent::CharacterSlotSwitchFailed => {
                             interface.open_window(&application, &mut focus_state, &ErrorWindow::new("Failed to switch character slots".to_owned()));
                         },
-                        NetworkEvent::ResurrectPlayer(entity_id) => {
-                            // Close the painel if it is the entity_id is the current player
+                        NetworkEvent::ResurrectPlayer { entity_id } => {
+                            // If the resurrected player is the current one, close the resurrect window.
                             if entities[0].get_entity_id() == entity_id {
                                 interface.close_window_with_class(&mut focus_state, RespawnWindow::WINDOW_CLASS);
                             }
-                            // Resurrect the player with entity_id
+                        },
+                        NetworkEvent::PlayerStandUp { entity_id } => {
                             let entity = entities.iter_mut().find(|entity| entity.get_entity_id() == entity_id);
+
                             if let Some(entity) = entity {
                                 entity.set_idle(client_tick);
                             }
-                        }
+                        },
                         NetworkEvent::AddEntity(entity_appeared_data) => {
                             // Sometimes (like after a job change) the server will tell the client
                             // that a new entity appeared, even though it was already on screen. So
@@ -753,19 +755,21 @@ fn main() {
                             let npc = Entity::Npc(npc);
                             entities.push(npc);
                         }
-                        NetworkEvent::RemoveEntity{entity_id, reason} => {
+                        NetworkEvent::RemoveEntity { entity_id, reason } => {
                             //If the motive is dead, you need to set the player to dead
                             if reason == DisappearanceReason::Died {
-                                if entities[0].get_entity_id() == entity_id {
-                                    entities[0].set_dead(client_tick);
-                                    interface.open_window(&application, &mut focus_state, &RespawnWindow);
-                                } else {
-                                    let entity = entities.iter_mut().find(|entity| entity.get_entity_id() == entity_id);
-                                    if let Some(entity) = entity {
+                                if let Some(entity) = entities.iter_mut().find(|entity| entity.get_entity_id() == entity_id) {
+                                    let entity_type = entity.get_entity_type();
+
+                                    if entity_type == EntityType::Monster {
+                                        // If the entity is a monster, it should disappear.
+                                        entities.retain(|entity| entity.get_entity_id() != entity_id);
+                                    } else if entity_type == EntityType::Player {
                                         let entity_type = entity.set_dead(client_tick);
-                                        // If is a monster, the monster disappear
-                                        if entity_type == EntityType::Monster {
-                                            entities.retain(|entity| entity.get_entity_id() != entity_id);
+
+                                        // If the player is us, we need to open the respawn window.
+                                        if entity_id == entities[0].get_entity_id() {
+                                            interface.open_window(&application, &mut focus_state, &RespawnWindow);
                                         }
                                     }
                                 }
@@ -838,7 +842,7 @@ fn main() {
                                 entity.set_details(name);
                             }
                         }
-                        NetworkEvent::DamageEffect(entity_id, damage_amount) => {
+                        NetworkEvent::DamageEffect { entity_id, damage_amount } => {
                             let entity = entities
                                 .iter()
                                 .find(|entity| entity.get_entity_id() == entity_id)

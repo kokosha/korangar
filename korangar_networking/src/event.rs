@@ -58,8 +58,14 @@ pub enum NetworkEvent {
     MapServerDisconnected {
         reason: DisconnectReason,
     },
-    /// Resurrect the player.
-    ResurrectPlayer(EntityId),
+    /// Resurrect a player.
+    ResurrectPlayer {
+        entity_id: EntityId,
+    },
+    /// Make a player stand up.
+    PlayerStandUp {
+        entity_id: EntityId,
+    },
     /// Add an entity to the list of entities that the client is aware of.
     AddEntity(EntityData),
     /// Remove an entity from the list of entities that the client is aware of
@@ -89,7 +95,10 @@ pub enum NetworkEvent {
     /// [RequestDetailsPacket] after the player hovered an entity.
     UpdateEntityDetails(EntityId, String),
     UpdateEntityHealth(EntityId, usize, usize),
-    DamageEffect(EntityId, usize),
+    DamageEffect {
+        entity_id: EntityId,
+        damage_amount: usize,
+    },
     HealEffect(EntityId, usize),
     UpdateStatus(StatusType),
     OpenDialog(String, EntityId),
