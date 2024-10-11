@@ -13,22 +13,30 @@ use crate::graphics::Texture;
 use crate::loaders::{ActionLoader, Actions, AnimationState, Sprite, SpriteLoader};
 use crate::EntityType;
 
+use super::error::LoadError;
+
 #[derive(new)]
 pub struct AnimationLoader {
     device: Arc<Device>,
     queue: Arc<Queue>,
+
     #[new(default)]
-    cache: HashMap<String, Arc<AnimationData>>,
+    // The string will be type of entity
+    // 0_{body_id}_{head_id}
+    // 1_{monster_id}
+    // 2_{npc_id}
+    cache: HashMap<String, AnimationData>,
 }
 
 impl AnimationLoader {
-    pub fn get_animation_data(
+    
+    pub fn load(
         &mut self,
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         entity_filename: Vec<String>,
         entity_type: EntityType,
-    ) -> AnimationData {
+    ) -> Result<AnimationData, LoadError>{
         let vec: Vec<AnimationPair> = entity_filename
             .iter()
             .map(|file_path| {
@@ -65,7 +73,7 @@ impl AnimationLoader {
                         if sprite_number == -1 {
                             continue;
                         }
-                        let temp = vec[animation_index].sprites.rgba_images[sprite_number as usize].clone();
+                        let temp = animation_pair.sprites.rgba_images[sprite_number as usize].clone();
                         let zoom = match motion.sprite_clips[pos].zoom {
                                 Some(value)=>value,
                                 None => 1.0,
@@ -79,9 +87,9 @@ impl AnimationLoader {
                         )
                         .unwrap();
 
-                        let n_width = (temp.width as f32 * zoom) as u32;
-                        let n_height = (temp.height as f32 *zoom) as u32;
-                        let rgba_new = image::imageops::resize(&rgba, n_width, n_height, FilterType::Lanczos3);
+                        let new_width = (temp.width as f32 * zoom) as u32;
+                        let new_height = (temp.height as f32 *zoom) as u32;
+                        let rgba_new = image::imageops::resize(&rgba, new_width, new_height, FilterType::Lanczos3);
 
                         let rgba_image =RgbaImageData {
                             width: rgba_new.width() as u16,
@@ -181,7 +189,6 @@ impl AnimationLoader {
                 rgba_images.push(rgba);
             }
             // 3 - Create the textures using the animation loader functions.
-
             let label = format!("{}_{}", entity_filename[0], action_index);
             let textures: Vec<Arc<Texture>> = rgba_images
                 .into_iter()
@@ -210,10 +217,24 @@ impl AnimationLoader {
                 .collect();
             animations.push(Animation { textures });
         }
-        AnimationData {
+        let animation_data = AnimationData {
             animations,
-            animation_pair: vec,
             entity_type,
+        };
+        self.cache.insert(entity_filename[0].clone(), animation_data.clone());
+        Ok(animation_data)
+
+    }
+
+    pub fn get(&mut self,       
+        sprite_loader: &mut SpriteLoader,
+        action_loader: &mut ActionLoader,
+        entity_filename: Vec<String>,
+        entity_type: EntityType) -> Result<AnimationData, LoadError> {
+
+        match self.cache.get(&entity_filename[0]) {
+            Some(animation_data) => Ok(animation_data.clone()),
+            None => self.load(sprite_loader, action_loader, entity_filename,entity_type),
         }
     }
 }
@@ -249,6 +270,7 @@ impl Frame {
     pub fn merge_frame_part(vec_frame_part: &mut Vec<FramePart>) -> RgbaImageData {
         // Adjusting the values
         for it in vec_frame_part.iter_mut() {
+            // A small offset when there is mirror image
             let mirror_offset = match it.mirror {
                 true => -1,
                 false => 1,
@@ -267,7 +289,7 @@ impl Frame {
                 },
                 false => 0,
             };
-            // Cprrecting the mirror offset of the center of image
+            // Correcting the mirror offset of the center of image
             let center_image_x: i32 = (it.rgba_data.width as i32 + mirror_offset) / 2;
             let center_image_y: i32 = (it.rgba_data.height as i32 + mirror_offset) / 2;
 
@@ -357,7 +379,7 @@ impl Frame {
     }
 }
 
-#[derive(PrototypeElement)]
+#[derive(Clone, PrototypeElement)]
 pub struct Animation {
     #[hidden_element]
     pub textures: Vec<Arc<Texture>>, // The vector of frames generated from animation pair
@@ -369,19 +391,17 @@ pub struct AnimationPair {
     pub actions: Arc<Actions>,
 }
 
-#[derive(PrototypeElement)]
+#[derive(Clone, PrototypeElement)]
 pub struct AnimationData {
     pub animations: Vec<Animation>,
-    pub animation_pair: Vec<AnimationPair>,
+    //pub animation_pair: Vec<AnimationPair>,
     pub entity_type: EntityType,
-    // The string will be type of entity
-    // {entity_type}_{body_id}_{head_id}_{action_id}_{motion_id}
 }
 
 
 
 impl AnimationData {
-    pub fn render<'a>(&self, animation_state: &AnimationState, camera_direction: usize, head_direction: usize) -> (&Texture, bool) {
+    pub fn render(&self, animation_state: &AnimationState, camera_direction: usize, head_direction: usize) -> (&Texture, bool) {
         let direction = (camera_direction + head_direction) % 8;
         let aa = animation_state.action * 8 + direction;
         let delay = 5.0;
@@ -400,6 +420,8 @@ impl AnimationData {
         // fixed remove set_start_time in MouseCursor.
         let time = frame as usize % animation.textures.len();
         let texture;
+
+        // Remove Doridori animation from Player
         if self.entity_type == EntityType::Player && animation_state.action == 0 {
             texture = &animation.textures[0];
         } else {
@@ -409,63 +431,3 @@ impl AnimationData {
     }
 }
 
-/*
-#[cfg(test)]
-mod clip {
-    use std::fs;
-    use super::*;
-
-    #[test]
-        fn merge_test() {
-            // Download every part of image
-
-            let paths = fs::read_dir("./").unwrap();
-            for path in paths {
-                println!("Name: {}", path.unwrap().path().display())
-            }
-
-            let image_head = match image::ImageReader::open("./head.png") {
-                Ok(image_reader) =>  match image_reader.decode() {
-                    Ok(image) => image,
-                    Err(e) => panic!("couldn't decode file"),
-                },
-                Err(err) => panic!("couldn't open image.png: {}", err),
-            };
-
-            let image_body = match image::ImageReader::open("./body.png") {
-                Ok(image_reader) =>  match image_reader.decode() {
-                    Ok(image) => image,
-                    Err(e) => panic!("couldn't decode file"),
-                },
-                Err(err) => panic!("couldn't open image.png: {}", err),
-            };
-
-            let head_offset_x = 1;
-            let head_offset_y = -65;
-
-            let body_offset_x = 1;
-            let body_offset_y = -25;
-
-            let head_height = image_head.height();
-            let head_width = image_head.width();
-
-            let body_height = image_body.height();
-            let body_width = image_body.width();
-
-            let mut frame_part: Vec<FramePart> = Vec::new();
-
-            println!("{}", image_body.width());
-            images.push(FramePart{
-                width: image_body.width() as u16,
-                height: image_body.height() as u16,
-                data: image_body.to_rgba8().clone().into_raw(),
-            });
-            images.push(FramePart{
-                width: image_head.width() as u16,
-                height: image_head.height() as u16,
-                data: image_head.to_rgba8().clone().into_raw(),
-            });
-
-            Frame::image_save(Frame::merge_get_animation_data(frame_part));
-        }
-}*/

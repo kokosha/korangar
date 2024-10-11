@@ -2,7 +2,7 @@ use std::fmt;
 use std::string::String;
 use std::sync::Arc;
 
-use cgmath::{Array, Vector2, Vector3, VectorSpace};
+use cgmath::{Array, InnerSpace, Vector2, Vector3, VectorSpace};
 use derive_new::new;
 use image::{save_buffer, RgbaImage};
 use korangar_interface::elements::PrototypeElement;
@@ -318,7 +318,7 @@ impl Common {
 
         let entity_filename: Vec<String> = get_entity_filename(script_loader, entity_type, job_id, head_id, sex);
         // generate animation
-        let animation_data = animation_loader.get_animation_data(sprite_loader, action_loader, entity_filename, entity_type);
+        let animation_data = animation_loader.get(sprite_loader, action_loader, entity_filename, entity_type).unwrap();
 
         let details = ResourceState::Unavailable;
         let animation_state = AnimationState::new(client_tick);
@@ -358,7 +358,7 @@ impl Common {
         script_loader: &ScriptLoader,
     ) {
         let entity_filename: Vec<String> = get_entity_filename(script_loader, self.entity_type, self.job_id, self.head_id, self.sex);
-        self.animation_data = animation_loader.get_animation_data(sprite_loader, action_loader, entity_filename, self.entity_type);
+        self.animation_data = animation_loader.get(sprite_loader, action_loader, entity_filename, self.entity_type).unwrap();
     }
 
     pub fn set_position(&mut self, map: &Map, position: Vector2<usize>, client_tick: ClientTick) {
@@ -765,20 +765,21 @@ impl Common {
             let (texture, mirror) = self
                 .animation_data
                 .render(&self.animation_state, camera_direction, self.head_direction);
+
             renderer.render_entity(
                 render_target,
                 render_pass,
                 camera,
                 texture,
                 self.position,
-                Vector3::new(0.0, 0.0, 0.0),
+                Vector3::new(0.0, -0.5, 0.0), // Shift a little upward to show shadow
                 Vector2::from_value(0.7),
                 Vector2::new(1, 1),
                 Vector2::new(0, 0),
                 mirror,
                 self.entity_id,
             );
-        /* }*/
+        //}
     }
 
     #[cfg(feature = "debug")]
