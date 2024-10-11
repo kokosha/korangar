@@ -77,25 +77,10 @@ impl fmt::Display for EntityType {
 }
 
 
-impl fmt::Display for EntityType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            EntityType::Warp => write!(f, "{:?}", "Warp"),
-            EntityType::Hidden => write!(f, "{:?}", "Hidden"),
-            EntityType::Player => write!(f, "{:?}", "Player"),
-            EntityType::Npc => write!(f, "{:?}", "Npc"),
-            EntityType::Monster => write!(f, "{:?}", "Monster"),
-        } 
-    }
-}
-
-
-
 #[derive(PrototypeElement)]
 pub struct Common {
     pub entity_id: EntityId,
     pub job_id: usize,
-    pub head_id: usize,
     pub head_id: usize,
     pub health_points: usize,
     pub maximum_health_points: usize,
@@ -307,7 +292,6 @@ impl Common {
     ) -> Self {
         let entity_id = entity_data.entity_id;
         let job_id = entity_data.job as usize;
-        let head_id = entity_data.head as usize;
         let head_id = entity_data.head as usize;
         let grid_position = entity_data.position;
         let grid_position = Vector2::new(grid_position.x, grid_position.y);
