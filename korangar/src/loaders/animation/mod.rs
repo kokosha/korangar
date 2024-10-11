@@ -107,6 +107,12 @@ impl AnimationLoader {
                         };
                         let mut attach_point_x = 0;
                         let mut attach_point_y = 0;
+                        let has_attach_point = match motion.attach_point_count {
+                            Some(value) => value == 1,
+                            None => false,
+                        };
+                        let mut attach_point_x = 0;
+                        let mut attach_point_y = 0;
 
                         if has_attach_point {
                             attach_point_x = motion.attach_points[0].position.x;
@@ -114,7 +120,50 @@ impl AnimationLoader {
                         }
                         let mut attach_point_parent_x = 0;
                         let mut attach_point_parent_y = 0;
+                        if has_attach_point {
+                            attach_point_x = motion.attach_points[0].position.x;
+                            attach_point_y = motion.attach_points[0].position.y;
+                        }
+                        let mut attach_point_parent_x = 0;
+                        let mut attach_point_parent_y = 0;
 
+                        let sprite_type = match animation_index {
+                            0 => SpriteType::Body,
+                            1 => SpriteType::Head,
+                            _ => SpriteType::Other,
+                        };
+                        frame_part = FramePart {
+                            sprite_type,
+                            rgba_data: rgba_image.clone(),
+                            offset_x: offset.x,
+                            offset_y: offset.y,
+                            attach_point_x,
+                            attach_point_y,
+                            has_attach_point,
+                            mirror,
+                            attach_point_parent_x,
+                            attach_point_parent_y,
+                        };
+                        vec_frame_monster.push(frame_part);
+                    }
+                    if vec_frame_monster.len() == 1 {
+                        vec_frame_part.push(vec_frame_monster[0].clone());
+                    } else {
+                        let rgba_new: RgbaImageData = Frame::merge_frame_part(&mut vec_frame_monster);
+                        let monster_frame_part = FramePart {
+                            sprite_type: SpriteType::Other,
+                            rgba_data: rgba_new.clone(),
+                            offset_x: 0,
+                            offset_y: 0,
+                            attach_point_x: 0,
+                            attach_point_y: 0,
+                            has_attach_point: false,
+                            mirror: false,
+                            attach_point_parent_x:0,
+                            attach_point_parent_y:0,
+                        };
+                        vec_frame_part.push(monster_frame_part);
+                    }
                         let sprite_type = match animation_index {
                             0 => SpriteType::Body,
                             1 => SpriteType::Head,
@@ -183,8 +232,15 @@ impl AnimationLoader {
                     if vec3_frame_part[animation_pair_index][action_index].len() <= motion_index {
                         continue;
                     }
+                    if vec3_frame_part[animation_pair_index].len() <= action_index {
+                        continue;
+                    }
+                    if vec3_frame_part[animation_pair_index][action_index].len() <= motion_index {
+                        continue;
+                    }
                     generate.push(vec3_frame_part[animation_pair_index][action_index][motion_index].clone());
                 }
+                let rgba: RgbaImageData = Frame::merge_frame_part(&mut generate);
                 let rgba: RgbaImageData = Frame::merge_frame_part(&mut generate);
                 rgba_images.push(rgba);
             }
@@ -261,11 +317,14 @@ pub struct FramePart {
 }
 
 
+
 pub struct Frame {
     pub texture: Arc<Texture>,
 }
 
 impl Frame {
+    // The generate image will be overwrite in the order of the index of the vector
+    pub fn merge_frame_part(vec_frame_part: &mut Vec<FramePart>) -> RgbaImageData {
     // The generate image will be overwrite in the order of the index of the vector
     pub fn merge_frame_part(vec_frame_part: &mut Vec<FramePart>) -> RgbaImageData {
         // Adjusting the values
