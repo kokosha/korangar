@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -22,6 +23,7 @@ pub struct Sprite {
     pub textures: Vec<Arc<Texture>>,
     #[hidden_element]
     pub rgba_images: Vec<RgbaImageData>,
+    pub palette_images: Vec<RgbaImageData>,
     #[cfg(feature = "debug")]
     sprite_data: SpriteData,
 }
@@ -64,9 +66,10 @@ impl SpriteLoader {
 
         let palette = sprite_data.palette.unwrap(); // unwrap_or_default() as soon as i know what
         // the default palette is
-
+        
         let rgba_images/*: Vec<Arc<ImmutableImage>>*/ = sprite_data
             .rgba_image_data
+            .clone()
             .into_iter();
 
         // TODO: Move this to an extension trait in `korangar_loaders`.
@@ -120,8 +123,25 @@ impl SpriteLoader {
                 Arc::new(texture)
             })
             .collect();
-
+        
         let rgba_images = sprite_data
+        .rgba_image_data
+        .clone()
+        .into_iter()
+        .map(|image_data| {
+            let data: Vec<_> = image_data.data
+                .chunks_exact(4)
+                .flat_map(|w| { [w[3], w[2], w[1], match w[0] {0=>0, _=>255}]})
+                .collect();
+            RgbaImageData {
+                width: image_data.width,
+                height: image_data.height,
+                data,
+            }
+        })
+        .collect();
+
+        let palette_images = sprite_data
             .palette_image_data
             .clone()
             .into_iter()
@@ -145,10 +165,10 @@ impl SpriteLoader {
         let sprite = Arc::new(Sprite {
             textures,
             rgba_images,
+            palette_images,
             #[cfg(feature = "debug")]
             sprite_data: cloned_sprite_data,
         });
-
         self.cache.insert(path.to_string(), sprite.clone());
 
         #[cfg(feature = "debug")]

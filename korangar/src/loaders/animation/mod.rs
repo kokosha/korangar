@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use derive_new::new;
 use image::imageops::FilterType;
-use image::{save_buffer, RgbaImage};
+use image::{save_buffer, Pixel, Rgba, RgbaImage};
 use korangar_interface::elements::PrototypeElement;
 use ragnarok_formats::sprite::RgbaImageData;
 use wgpu::{Device, Extent3d, Queue, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages};
@@ -73,7 +73,10 @@ impl AnimationLoader {
                         if sprite_number == -1 {
                             continue;
                         }
-                        let temp = animation_pair.sprites.rgba_images[sprite_number as usize].clone();
+                        let temp  = match animation_pair.sprites.rgba_images.len() {
+                            0 => animation_pair.sprites.palette_images[sprite_number as usize].clone(),
+                            _ => animation_pair.sprites.rgba_images[sprite_number as usize].clone(),
+                        };
                         let zoom = match motion.sprite_clips[pos].zoom {
                                 Some(value)=>value,
                                 None => 1.0,
@@ -264,8 +267,37 @@ pub struct FramePart {
 pub struct Frame {
     pub texture: Arc<Texture>,
 }
+/*pub struct Pixel{
+    pub red: u32,
+    pub green: u32,
+    pub blue: u32,
+    pub alpha: u32,
+}*/
 
 impl Frame {
+    /*pub fn alpha_blend(source: Pixel, destination: Pixel ) -> Pixel{
+        let mut blended: Pixel;
+        if destination.alpha == 0x00 || source.alpha == 0xFF{
+            blended = source;
+        }
+        else{
+            let new_alpha: u32 = source.alpha + (destination.alpha * (255 - source.alpha) / 255);
+
+
+            let red = (source.red * source.alpha / 255 + (destination.red * destination.alpha * (255 - source.alpha) / (255 * 255))) * 255 / new_alpha;
+            let green = (source.green * source.alpha / 255 + (destination.green * destination.alpha * (255 -  source.alpha) / (255 * 255))) * 255 / new_alpha;
+            let blue = (source.blue * source.alpha / 255 + (destination.blue * destination.alpha * (255 -  source.alpha) / (255 * 255))) * 255 / new_alpha;
+            let alpha = new_alpha;
+            blended = Pixel{
+                red,
+                green,
+                blue,
+                alpha
+            };
+        }
+
+        return blended;
+    }*/
     // The generate image will be overwrite in the order of the index of the vector
     pub fn merge_frame_part(vec_frame_part: &mut Vec<FramePart>) -> RgbaImageData {
         // Adjusting the values
@@ -351,10 +383,10 @@ impl Frame {
                     if vec_frame_part[index].mirror {
                         change_x = width as i32 - 1 - x as i32;
                     }
+                    let pixel: &mut Rgba<u8> = rgba.get_pixel_mut(new_x as u32, new_y as u32);
+                    pixel.blend(vec_rgba[index].get_pixel(change_x as u32, y));
+                    //rgba.put_pixel(new_x as u32, new_y as u32, pixel);
 
-                    if vec_rgba[index].get_pixel(change_x as u32, y)[3] != 0 {
-                        rgba.put_pixel(new_x as u32, new_y as u32, *vec_rgba[index].get_pixel(change_x as u32, y));
-                    }
                 }
             }
         }
@@ -367,9 +399,9 @@ impl Frame {
     }
 
     #[cfg(feature = "debug")]
-    fn image_save(image_new: RgbaImageData) {
+    pub fn image_save(image_new: RgbaImageData, sprite_number: i32) {
         save_buffer(
-            format!("image.png"),
+            format!("image_{}.png", sprite_number),
             &image_new.data,
             image_new.width.into(),
             image_new.height.into(),
