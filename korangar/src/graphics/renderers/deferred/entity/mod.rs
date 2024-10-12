@@ -31,8 +31,9 @@ pub struct Constants {
     world: [[f32; 4]; 4],
     texture_position: [f32; 2],
     texture_size: [f32; 2],
-    depth_offset: f32,
-    curvature: f32,
+    //depth_offset: f32,
+    //curvature: f32,
+    z_value: f32,
     mirror: u32,
 }
 
@@ -254,7 +255,7 @@ impl EntityRenderer {
         let world_matrix = camera.billboard_matrix(position, origin, size);
         let texture_size = Vector2::new(1.0 / cell_count.x as f32, 1.0 / cell_count.y as f32);
         let texture_position = Vector2::new(texture_size.x * cell_position.x as f32, texture_size.y * cell_position.y as f32);
-        let (depth_offset, curvature) = camera.calculate_depth_offset_and_curvature(&world_matrix, scale.x, scale.y);
+        //let (depth_offset, curvature) = camera.calculate_depth_offset_and_curvature(&world_matrix, scale.x, scale.y);
 
         let texture_bind_group = self.device.create_bind_group(&BindGroupDescriptor {
             label: Some("entity renderer"),
@@ -269,8 +270,9 @@ impl EntityRenderer {
             world: world_matrix.into(),
             texture_position: texture_position.into(),
             texture_size: texture_size.into(),
-            depth_offset,
-            curvature,
+        //    depth_offset,
+        //    curvature,
+            z_value: position.z,
             mirror: mirror as u32,
         };
 

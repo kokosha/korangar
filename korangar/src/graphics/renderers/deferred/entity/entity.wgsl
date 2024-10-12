@@ -7,24 +7,18 @@ struct Constants {
     world: mat4x4<f32>,
     texture_position: vec2<f32>,
     texture_size: vec2<f32>,
-    depth_offset: f32,
-    curvature: f32,
     mirror: u32,
 }
 
 struct Vertex {
     position: vec3<f32>,
     texture_coordinates: vec2<f32>,
-    depth_multiplier: f32,
-    curvature_multiplier: f32,
 }
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) texture_coordinates: vec2<f32>,
     @location(1) normal: vec3<f32>,
-    @location(2) depth_offset: f32,
-    @location(3) curvature: f32,
 }
 
 struct FragmentOutput {
@@ -56,8 +50,6 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
     let rotated = rotateY(vec3<f32>(matrices.view[2].x, 0, matrices.view[2].z), vertex.position.x);
     output.normal = vec3<f32>(-rotated.x, rotated.y, rotated.z);
-    output.depth_offset = vertex.depth_multiplier;
-    output.curvature = vertex.curvature_multiplier;
     return output;
 }
 
@@ -66,22 +58,13 @@ fn fs_main(
     @builtin(position) position: vec4<f32>,
     @location(0) texture_coordinates: vec2<f32>,
     @location(1) normal: vec3<f32>,
-    @location(2) depth_offset: f32,
-    @location(3) curvature: f32,
 ) -> FragmentOutput {
     let diffuse_color = textureSample(texture, linear_sampler, texture_coordinates);
     if (diffuse_color.a != 1.0) {
         discard;
     }
 
-    let scaled_depth_offset = pow(depth_offset, 2.0) * constants.depth_offset;
-    let scaled_curvature_offset = (0.5 - pow(curvature, 2.0)) * constants.curvature;
-
-    let linear_z: f32 = nonLinearToLinear(position.z);
-    // We add the offsets in linear view space.
-    let adjusted_linear_z: f32 = -2.0 + linear_z - scaled_depth_offset - scaled_curvature_offset;
-    let non_linear_z: f32 = linearToNonLinear(adjusted_linear_z);
-    let clamped_depth = clamp(non_linear_z, 0.0, 1.0);
+    let clamped_depth = clamp(position.z, 0.0, 1.0);
 
     var output: FragmentOutput;
     output.fragment_color = diffuse_color;
@@ -115,10 +98,8 @@ fn vertex_data(vertex_index: u32) -> Vertex {
     let z = 1.0;
     let u = f32(1 - case0);
     let v = f32(1 - case1);
-    let depth = f32(case1);
-    let curve = u * 2.0 - 1.0;
 
-    return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
+    return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
 }
 
 

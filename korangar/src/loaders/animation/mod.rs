@@ -219,6 +219,7 @@ impl AnimationLoader {
         }
         let animation_data = AnimationData {
             animations,
+            animation_pair:vec,
             entity_type,
         };
         self.cache.insert(entity_filename[0].clone(), animation_data.clone());
@@ -366,6 +367,66 @@ impl Frame {
         }
     }
 
+
+    /*pub fn position(vec_frame_part: &mut Vec<FramePart>) -> RgbaImageData {
+        // Adjusting the values
+        for it in vec_frame_part.iter_mut() {
+            // A small offset when there is mirror image
+            let mirror_offset = match it.mirror {
+                true => -1,
+                false => 1,
+            };
+            let attach_point_offset_x = match &it.has_attach_point {
+                true => match &it.sprite_type {
+                    SpriteType::Head => -it.attach_point_x + it.attach_point_parent_x,
+                    _ => 0,
+                },
+                false => 0,
+            };
+            let attach_point_offset_y = match &it.has_attach_point {
+                true => match &it.sprite_type {
+                    SpriteType::Head => -it.attach_point_y + it.attach_point_parent_y,
+                    _ => 0,
+                },
+                false => 0,
+            };
+            // Correcting the mirror offset of the center of image
+            let center_image_x: i32 = (it.rgba_data.width as i32 + mirror_offset) / 2;
+            let center_image_y: i32 = (it.rgba_data.height as i32 + mirror_offset) / 2;
+
+            // Correcting the origin from the center of image to the left upper corner of image
+            it.offset_x = it.offset_x - center_image_x + attach_point_offset_x;
+            it.offset_y = it.offset_y - center_image_y + attach_point_offset_y;
+        }
+        if vec_frame_part.is_empty()  {
+            return RgbaImageData {
+                width: 1,
+                height: 1,
+                data: vec![0x00, 0x00, 0x00, 0x00],
+            }
+        }
+        // Get the minimal offset to find the new pixel (0, 0)
+        let offset_x = vec_frame_part.iter().min_by_key(|it| it.offset_x).unwrap().offset_x;
+        let offset_y = vec_frame_part.iter().min_by_key(|it| it.offset_y).unwrap().offset_y;
+
+        // The new size of the rgba
+        let it_1 = vec_frame_part
+            .iter()
+            .max_by_key(|it| it.offset_x + it.rgba_data.width as i32)
+            .unwrap();
+        let it_2 = vec_frame_part
+            .iter()
+            .max_by_key(|it| it.offset_y + it.rgba_data.height as i32)
+            .unwrap();
+
+        let mut new_width = it_1.offset_x + it_1.rgba_data.width as i32;
+        let mut new_height = it_2.offset_y + it_2.rgba_data.height as i32;
+        new_width -= offset_x;
+        new_height -= offset_y;
+
+
+    }*/
+
     #[cfg(feature = "debug")]
     fn image_save(image_new: RgbaImageData) {
         save_buffer(
@@ -385,7 +446,7 @@ pub struct Animation {
     pub textures: Vec<Arc<Texture>>, // The vector of frames generated from animation pair
 }
 
-#[derive(PrototypeElement)]
+#[derive(Clone, PrototypeElement)]
 pub struct AnimationPair {
     pub sprites: Arc<Sprite>,
     pub actions: Arc<Actions>,
@@ -394,7 +455,7 @@ pub struct AnimationPair {
 #[derive(Clone, PrototypeElement)]
 pub struct AnimationData {
     pub animations: Vec<Animation>,
-    //pub animation_pair: Vec<AnimationPair>,
+    pub animation_pair: Vec<AnimationPair>,
     pub entity_type: EntityType,
 }
 

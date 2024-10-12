@@ -733,9 +733,10 @@ impl Common {
     where
         T: Renderer + EntityRenderer,
     {
-        /*if self.animation_data.animation_pair.len() == 1 {
+        /*if self.animation_data.animation_pair.len() == 1 {*/
             // TODO: Made everything using the animation, deprecate the texture from
             // SpriteLoader.
+            let mut count = 0;
             for constructor in self.animation_data.animation_pair.iter() {
                 let camera_direction = camera.camera_direction();
                 let (texture, position, mirror) = constructor.actions.render(
@@ -745,22 +746,27 @@ impl Common {
                     self.head_direction,
                 );
 
+                let view_direction = camera.view_direction();
+                let right_vector = camera.look_up_vector().cross(view_direction).normalize();
+                let up_vector = view_direction.cross(right_vector).normalize();
+
                 renderer.render_entity(
                     render_target,
                     render_pass,
                     camera,
                     texture,
-                    self.position,
-                    Vector3::new(0.0, 0.0, 0.0),
+                    self.position  - view_direction*1.0*(count as f32) + up_vector*9.0*(count as f32),
+                    Vector3::new(0.0, 0.0, 0.0) ,
                     Vector2::from_value(0.7),
                     Vector2::new(1, 1),
                     Vector2::new(0, 0),
                     mirror,
                     self.entity_id,
                 );
+                count += 1;
             }
-        } else {*/
-            let camera_direction = camera.camera_direction();
+        /*   } else {
+          let camera_direction = camera.camera_direction();
             let (texture, mirror) = self
                 .animation_data
                 .render(&self.animation_state, camera_direction, self.head_direction);
@@ -778,7 +784,7 @@ impl Common {
                 mirror,
                 self.entity_id,
             );
-        //}
+        //}*/
     }
 
     #[cfg(feature = "debug")]
