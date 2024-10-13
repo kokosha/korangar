@@ -143,73 +143,87 @@ impl ModelLoader {
         main_bounding_box: &mut AABB,
         root_node_name: &ModelString<40>,
         reverse_order: bool,
+        version: InternalVersion,
     ) -> Node {
-        let (main_matrix, transform_matrix, box_transform_matrix) = Self::calculate_matrices(current_node, parent_matrix);
-        let vertices = NativeModelVertex::to_vertices(Self::make_vertices(current_node, &main_matrix, reverse_order));
+        if version.smaller(2, 2) {
+            let (main_matrix, transform_matrix, box_transform_matrix) = Self::calculate_matrices(current_node, parent_matrix);
+            let vertices = NativeModelVertex::to_vertices(Self::make_vertices(current_node, &main_matrix, reverse_order));
 
-        let vertex_buffer = Buffer::with_data(
-            device,
-            queue,
-            &current_node.node_name.inner,
-            BufferUsages::COPY_DST | BufferUsages::VERTEX,
-            &vertices,
-        );
+            let vertex_buffer = Buffer::with_data(
+                device,
+                queue,
+                &current_node.node_name.inner,
+                BufferUsages::COPY_DST | BufferUsages::VERTEX,
+                &vertices,
+            );
 
-        let box_matrix = box_transform_matrix * main_matrix;
-        let bounding_box = AABB::from_vertices(
-            current_node
-                .vertex_positions
+            let box_matrix = box_transform_matrix * main_matrix;
+            let bounding_box = AABB::from_vertices(
+                current_node
+                    .vertex_positions
+                    .iter()
+                    .map(|position| multiply_matrix4_and_point3(&box_matrix, *position)),
+            );
+            main_bounding_box.extend(&bounding_box);
+
+            let node_textures: Vec<Arc<Texture>> = current_node
+                .texture_indices
                 .iter()
-                .map(|position| multiply_matrix4_and_point3(&box_matrix, *position)),
-        );
-        main_bounding_box.extend(&bounding_box);
+                .map(|index| *index as usize)
+                .map(|index| textures[index].clone())
+                .collect();
 
-        let final_matrix = match current_node.node_name == *root_node_name {
+            let child_nodes = nodes
+                .iter()
+                .filter(|node| node.parent_node_name == current_node.node_name)
+                .filter(|node| node.parent_node_name != node.node_name)
+                .map(|node| {
+                    Self::process_node_mesh(
+                        device,
+                        queue,
+                        node,
+                        nodes,
+                        textures,
+                        &box_transform_matrix,
+                        main_bounding_box,
+                        root_node_name,
+                        reverse_order,
+                        version,
+                    )
+                })
+                .collect();
+
+            let node_textures = TextureGroup::new(device, &root_node_name.inner, node_textures);
+
+            Node::new(
+                Matrix4::identity(),
+                transform_matrix,
+                vertex_buffer,
+                node_textures,
+                child_nodes,
+                current_node.rotation_keyframes.clone(),
+            )
+        } else {
+            panic!("not implemented");
+        }
+    }
+
+    pub fn calculate_transformation_matrix(node: &mut Node, is_root: bool, bounding_box: AABB, parent_matrix: Matrix4<f32>) {
+        let final_matrix = match is_root {
             true => {
                 Matrix4::from_translation(-Vector3::new(
                     bounding_box.center().x,
                     bounding_box.max().y,
                     bounding_box.center().z,
-                )) * transform_matrix
+                )) * node.temp_matrix
             }
-            false => transform_matrix,
+            false => node.temp_matrix,
         };
+        node.transform_matrix = parent_matrix * final_matrix;
 
-        let node_textures: Vec<Arc<Texture>> = current_node
-            .texture_indices
-            .iter()
-            .map(|index| *index as usize)
-            .map(|index| textures[index].clone())
-            .collect();
-
-        let child_nodes = nodes
-            .iter()
-            .filter(|node| node.parent_node_name == current_node.node_name)
-            .filter(|node| node.parent_node_name != node.node_name)
-            .map(|node| {
-                Self::process_node_mesh(
-                    device,
-                    queue,
-                    node,
-                    nodes,
-                    textures,
-                    &box_transform_matrix,
-                    main_bounding_box,
-                    root_node_name,
-                    reverse_order,
-                )
-            })
-            .collect();
-
-        let node_textures = TextureGroup::new(device, &root_node_name.inner, node_textures);
-
-        Node::new(
-            final_matrix,
-            vertex_buffer,
-            node_textures,
-            child_nodes,
-            current_node.rotation_keyframes.clone(),
-        )
+        for mut child_node in node.child_nodes.iter_mut() {
+            Self::calculate_transformation_matrix(&mut child_node, false, bounding_box, node.transform_matrix);
+        }
     }
 
     fn load(&mut self, texture_loader: &mut TextureLoader, model_file: &str, reverse_order: bool) -> Result<Arc<Model>, LoadError> {
@@ -249,8 +263,10 @@ impl ModelLoader {
             .find(|node_data| &node_data.node_name == root_node_name)
             .expect("failed to find main node");
 
+        let version: InternalVersion = model_data.version.into();
+
         let mut bounding_box = AABB::uninitialized();
-        let root_node = Self::process_node_mesh(
+        let mut root_node = Self::process_node_mesh(
             &self.device,
             &self.queue,
             root_node,
@@ -260,7 +276,10 @@ impl ModelLoader {
             &mut bounding_box,
             root_node_name,
             reverse_order,
+            version,
         );
+        Self::calculate_transformation_matrix(&mut root_node, true, bounding_box, Matrix4::identity());
+
         let model = Arc::new(Model::new(
             root_node,
             bounding_box,

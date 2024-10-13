@@ -13,6 +13,8 @@ pub struct Node {
     #[hidden_element]
     pub transform_matrix: Matrix4<f32>,
     #[hidden_element]
+    pub temp_matrix: Matrix4<f32>,
+    #[hidden_element]
     pub vertex_buffer: Buffer<ModelVertex>,
     #[hidden_element]
     pub textures: TextureGroup,
@@ -55,13 +57,7 @@ impl Node {
 
         Matrix4::from_translation(transform.position.to_vec())
             * rotation_matrix
-            * Matrix4::from_nonuniform_scale(transform.scale.x, transform.scale.y, transform.scale.z)
-            * Matrix4::from_cols(
-                Vector4::new(1.0, 0.0, 0.0, 0.0),
-                Vector4::new(0.0, -1.0, 0.0, 0.0),
-                Vector4::new(0.0, 0.0, 1.0, 0.0),
-                Vector4::new(0.0, 0.0, 0.0, 1.0),
-            )
+            * Matrix4::from_nonuniform_scale(transform.scale.x, -transform.scale.y, transform.scale.z)
             * self.transform_matrix
             * animation_rotation_matrix
     }
