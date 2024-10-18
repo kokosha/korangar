@@ -1411,6 +1411,8 @@ dependencies = [
  "korangar_debug",
  "korangar_util",
  "rayon",
+ "ron",
+ "serde",
 ]
 
 [[package]]

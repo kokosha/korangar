@@ -10,6 +10,8 @@ kira = { workspace = true, features = ["cpal", "mp3", "wav"] }
 korangar_debug = { workspace = true, optional = true }
 korangar_util = { workspace = true }
 rayon = { workspace = true }
+ron = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
 

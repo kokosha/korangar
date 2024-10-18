@@ -27,6 +27,7 @@ use std::sync::Arc;
 
 use cgmath::{Vector2, Vector3};
 use image::{EncodableLayout, ImageFormat, ImageReader};
+use korangar_audio::settings::AudioSettings;
 use korangar_audio::{AudioEngine, SoundEffectKey};
 #[cfg(feature = "debug")]
 use korangar_debug::logging::{print_debug, Colorize};
@@ -168,6 +169,10 @@ struct Client {
     framerate_limit: MappedRemote<GraphicsSettings, bool>,
     #[cfg(feature = "debug")]
     render_settings: PlainTrackedState<RenderSettings>,
+
+    audio_settings: PlainTrackedState<AudioSettings>,
+    audio_minimized:  MappedRemote<AudioSettings, bool>,
+    audio_login:  MappedRemote<AudioSettings, bool>,
 
     application: InterfaceSettings,
     interface: Interface<InterfaceSettings>,
@@ -336,6 +341,10 @@ impl Client {
 
         time_phase!("create audio engine", {
             let audio_engine = Arc::new(AudioEngine::new(game_file_loader.clone()));
+            let audio_settings = PlainTrackedState::new(AudioSettings::new());
+            let audio_minimized = audio_settings.mapped(|settings| &settings.audio_minimized).new_remote();
+            let audio_login   = audio_settings.mapped(|settings| &settings.audio_login).new_remote();
+            audio_engine.load_audio_settings(audio_settings.get().clone());
         });
 
         time_phase!("create resource managers", {
@@ -380,6 +389,8 @@ impl Client {
 
             let shadow_detail = graphics_settings.mapped(|settings| &settings.shadow_detail).new_remote();
             let framerate_limit = graphics_settings.mapped(|settings| &settings.frame_limit).new_remote();
+
+
 
             #[cfg(feature = "debug")]
             let render_settings = PlainTrackedState::new(RenderSettings::new());
@@ -517,6 +528,9 @@ impl Client {
             input_system,
             shadow_detail,
             framerate_limit,
+            audio_settings,
+            audio_minimized,
+            audio_login,
             #[cfg(feature = "debug")]
             render_settings,
             application,
@@ -566,7 +580,7 @@ impl Client {
             tile_texture_group,
             chat_messages,
             main_menu_click_sound_effect,
-            map,
+            map
         }
     }
 
@@ -1336,7 +1350,10 @@ impl Client {
                 ),
                 UserEvent::OpenAudioSettingsWindow => {
                     self.interface
-                        .open_window(&self.application, &mut self.focus_state, &AudioSettingsWindow)
+                        .open_window(&self.application, &mut self.focus_state, &AudioSettingsWindow::new(
+                            self.audio_minimized.clone_state(),
+                            self.audio_login.clone_state()
+                        ))
                 }
                 UserEvent::OpenFriendsWindow => {
                     self.interface.open_window(
@@ -1730,6 +1747,10 @@ impl Client {
             // For some reason the interface buffer becomes messed up when
             // recreating the surface, so we need to render it again.
             self.interface.schedule_render();
+        }
+
+        if self.audio_minimized.consume_changed() || self.audio_login.consume_changed(){
+            self.audio_engine.load_audio_settings(self.audio_settings.get().clone());
         }
 
         #[cfg(feature = "debug")]

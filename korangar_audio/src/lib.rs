@@ -1,6 +1,8 @@
 //! This crate exposes an audio engine for the client
 #![feature(let_chains)]
 #![forbid(missing_docs)]
+/// Add settings to audio
+pub mod settings;
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -32,6 +34,7 @@ use korangar_util::collision::{KDTree, Sphere};
 use korangar_util::container::{Cacheable, GenerationalSlab, ResourceCache, SimpleSlab};
 use korangar_util::{create_generational_key, create_simple_key, FileLoader};
 use rayon::spawn;
+use settings::AudioSettings;
 
 create_generational_key!(SoundEffectKey, "The key for a cached sound effect");
 create_simple_key!(AmbientKey, "The key for a ambient sound");
@@ -97,6 +100,7 @@ enum AsyncLoadResult {
 /// the map).
 pub struct AudioEngine<F> {
     engine_context: Mutex<EngineContext<F>>,
+    audio_settings: Mutex<AudioSettings>,
 }
 
 struct EngineContext<F> {
@@ -192,7 +196,28 @@ impl<F: FileLoader> AudioEngine<F> {
             sound_effect_track,
         });
 
-        AudioEngine { engine_context }
+        AudioEngine { engine_context, audio_settings: Mutex::new(AudioSettings::default())}
+    }
+
+    /// This function load AudioSettings
+    pub fn load_audio_settings(&self, audio_settings: AudioSettings) {
+        *self.audio_settings.lock().unwrap() = audio_settings;
+    }
+
+    /// This function silence the sound while in login or minimized screen
+    pub fn silence(&self) {
+        self.set_main_volume(Volume::Amplitude(0.0));
+        self.set_background_music_volume(Volume::Amplitude(0.0));
+        self.set_ambient_volume(Volume::Amplitude(0.0));
+        self.set_sound_effect_volume(Volume::Amplitude(0.0));
+    }
+
+    /// This function unsilence the sound while in login or minimized screen
+    pub fn unsilence(&self) {
+        self.set_main_volume(Volume::Amplitude(1.0));
+        self.set_background_music_volume(Volume::Amplitude(1.0));
+        self.set_ambient_volume(Volume::Amplitude(1.0));
+        self.set_sound_effect_volume(Volume::Amplitude(1.0));
     }
 
     /// This function needs the full file path with the file extension.

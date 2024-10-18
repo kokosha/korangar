@@ -1,6 +1,7 @@
 mod event;
 mod key;
 mod mode;
+mod windows;
 
 use std::mem::variant_count;
 use std::sync::atomic::{AtomicU64, Ordering};
