@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::ops::{Add, Sub};
 use std::sync::Arc;
 
 use bytemuck::{cast_slice, Pod, Zeroable};
-use cgmath::{Point3, Vector2};
+use cgmath::{Matrix4, Point3, Vector2};
 use wgpu::{
     include_wgsl, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource,
     BindingType, BufferBindingType, BufferUsages, ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, Device, Face,
@@ -256,6 +257,59 @@ impl EntityRenderer {
         let texture_position = Vector2::new(texture_size.x * cell_position.x as f32, texture_size.y * cell_position.y as f32);
         let (depth_offset, curvature) = camera.calculate_depth_offset_and_curvature(&world_matrix, scale.x, scale.y);
 
+        let texture_bind_group = self.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("entity renderer"),
+            layout: &self.texture_bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(texture.get_texture_view()),
+            }],
+        });
+
+        let push_constants = Constants {
+            world: world_matrix.into(),
+            texture_position: texture_position.into(),
+            texture_size: texture_size.into(),
+            depth_offset,
+            curvature,
+            mirror: mirror as u32,
+        };
+
+        render_pass.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, cast_slice(&[push_constants]));
+        render_pass.set_bind_group(1, &texture_bind_group, &[]);
+        render_pass.draw(0..6, 0..1);
+    }
+
+    pub fn render_debug(
+        &self,
+        render_target: &mut <DeferredRenderer as Renderer>::Target,
+        render_pass: &mut RenderPass,
+        current_camera: &dyn Camera,
+        target_camera: &dyn Camera,
+        texture: &Texture,
+        position: Point3<f32>,
+        origin: Point3<f32>,
+        scale: Vector2<f32>,
+        cell_count: Vector2<usize>,
+        cell_position: Vector2<usize>,
+        mirror: bool,
+    ) {
+        if render_target.bound_sub_renderer(DeferredSubRenderer::Entity) {
+            self.bind_pipeline(render_pass, current_camera);
+        }
+
+        let image_dimensions = texture.get_extent();
+        let size = Vector2::new(
+            image_dimensions.width as f32 * scale.x / 10.0,
+            image_dimensions.height as f32 * scale.y / 10.0,
+        );
+
+        let mut world_matrix = target_camera.billboard_matrix(position, origin, size);
+        let texture_size = Vector2::new(1.0 / cell_count.x as f32, 1.0 / cell_count.y as f32);
+        let texture_position = Vector2::new(texture_size.x * cell_position.x as f32, texture_size.y * cell_position.y as f32);
+        let (depth_offset, curvature) = target_camera.calculate_depth_offset_and_curvature(&world_matrix, scale.x, scale.y);
+
+        world_matrix = world_matrix;
         let texture_bind_group = self.device.create_bind_group(&BindGroupDescriptor {
             label: Some("entity renderer"),
             layout: &self.texture_bind_group_layout,

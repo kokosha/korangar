@@ -285,6 +285,24 @@ impl Map {
             .for_each(|entity| entity.render(render_target, render_pass, renderer, camera));
     }
 
+    pub fn render_debug_entities<T>(
+        &self,
+        entities: &[Entity],
+        render_target: &mut T::Target,
+        render_pass: &mut RenderPass,
+        renderer: &T,
+        current_camera: &dyn Camera,
+        target_camera: &dyn Camera,
+        include_self: bool,
+    ) where
+        T: Renderer + EntityRenderer,
+    {
+        entities
+            .iter()
+            .skip(!include_self as usize)
+            .for_each(|entity| entity.render_debug(render_target, render_pass, renderer, current_camera, target_camera));
+    }
+
     #[cfg(feature = "debug")]
     #[korangar_debug::profile]
     pub fn render_pathing<T>(

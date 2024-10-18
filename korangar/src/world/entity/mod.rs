@@ -748,6 +748,37 @@ impl Common {
         );
     }
 
+    pub fn render_debug<T>(
+        &self,
+        render_target: &mut T::Target,
+        render_pass: &mut RenderPass,
+        renderer: &T,
+        current_camera: &dyn Camera,
+        target_camera: &dyn Camera,
+    ) where
+        T: Renderer + EntityRenderer,
+    {
+        let camera_direction = target_camera.camera_direction();
+        let (texture, position, mirror) = self
+            .actions
+            .render(&self.sprite, &self.animation_state, camera_direction, self.head_direction);
+
+        renderer.render_entity_debug(
+            render_target,
+            render_pass,
+            current_camera,
+            target_camera,
+            texture,
+            self.position,
+            Point3::new(position.x, position.y, 0.0),
+            Vector2::from_value(0.7),
+            Vector2::new(1, 1),
+            Vector2::new(0, 0),
+            mirror,
+            self.entity_id,
+        );
+    }
+
     #[cfg(feature = "debug")]
     pub fn render_marker<T>(
         &self,
@@ -1089,6 +1120,20 @@ impl Entity {
         T: Renderer + EntityRenderer,
     {
         self.get_common().render(render_target, render_pass, renderer, camera);
+    }
+
+    pub fn render_debug<T>(
+        &self,
+        render_target: &mut T::Target,
+        render_pass: &mut RenderPass,
+        renderer: &T,
+        current_camera: &dyn Camera,
+        target_camera: &dyn Camera,
+    ) where
+        T: Renderer + EntityRenderer,
+    {
+        self.get_common()
+            .render_debug(render_target, render_pass, renderer, current_camera, target_camera);
     }
 
     #[cfg(feature = "debug")]

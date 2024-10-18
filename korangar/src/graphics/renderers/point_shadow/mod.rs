@@ -136,6 +136,25 @@ impl EntityRendererTrait for PointShadowRenderer {
             mirror,
         );
     }
+
+    fn render_entity_debug(
+        &self,
+        render_target: &mut <Self as Renderer>::Target,
+        render_pass: &mut RenderPass,
+        current_camera: &dyn Camera,
+        target_camera: &dyn Camera,
+        texture: &Texture,
+        position: Point3<f32>,
+        origin: Point3<f32>,
+        scale: Vector2<f32>,
+        cell_count: Vector2<usize>,
+        cell_position: Vector2<usize>,
+        mirror: bool,
+        _entity_id: EntityId,
+    ) where
+        Self: Renderer,
+    {
+    }
 }
 
 impl IndicatorRendererTrait for PointShadowRenderer {

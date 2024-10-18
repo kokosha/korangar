@@ -196,7 +196,10 @@ impl<F: FileLoader> AudioEngine<F> {
             sound_effect_track,
         });
 
-        AudioEngine { engine_context, audio_settings: Mutex::new(AudioSettings::default())}
+        AudioEngine {
+            engine_context,
+            audio_settings: Mutex::new(AudioSettings::default()),
+        }
     }
 
     /// This function load AudioSettings
@@ -204,8 +207,28 @@ impl<F: FileLoader> AudioEngine<F> {
         *self.audio_settings.lock().unwrap() = audio_settings;
     }
 
+    /// This function toggle audio if the client is focused
+    pub fn toggle_audio_minimized(&self) {
+        let mut audio_settings = self.audio_settings.lock().unwrap();
+        audio_settings.audio_minimized = !audio_settings.audio_minimized;
+    }
+
+    /// This function toggle audio during login part
+    pub fn toggle_audio_login(&self) {
+        let mut audio_settings = self.audio_settings.lock().unwrap();
+        audio_settings.audio_login = !audio_settings.audio_login;
+    }
+
     /// This function silence the sound while in login or minimized screen
     pub fn silence(&self) {
+        let audio_settings = self.audio_settings.lock().unwrap();
+
+        if audio_settings.audio_minimized {
+            return;
+        }
+        if audio_settings.audio_login && false {
+            return;
+        }
         self.set_main_volume(Volume::Amplitude(0.0));
         self.set_background_music_volume(Volume::Amplitude(0.0));
         self.set_ambient_volume(Volume::Amplitude(0.0));

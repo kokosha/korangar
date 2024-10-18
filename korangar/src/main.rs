@@ -171,8 +171,8 @@ struct Client {
     render_settings: PlainTrackedState<RenderSettings>,
 
     audio_settings: PlainTrackedState<AudioSettings>,
-    audio_minimized:  MappedRemote<AudioSettings, bool>,
-    audio_login:  MappedRemote<AudioSettings, bool>,
+    audio_minimized: MappedRemote<AudioSettings, bool>,
+    audio_login: MappedRemote<AudioSettings, bool>,
 
     application: InterfaceSettings,
     interface: Interface<InterfaceSettings>,
@@ -343,7 +343,7 @@ impl Client {
             let audio_engine = Arc::new(AudioEngine::new(game_file_loader.clone()));
             let audio_settings = PlainTrackedState::new(AudioSettings::new());
             let audio_minimized = audio_settings.mapped(|settings| &settings.audio_minimized).new_remote();
-            let audio_login   = audio_settings.mapped(|settings| &settings.audio_login).new_remote();
+            let audio_login = audio_settings.mapped(|settings| &settings.audio_login).new_remote();
             audio_engine.load_audio_settings(audio_settings.get().clone());
         });
 
@@ -389,8 +389,6 @@ impl Client {
 
             let shadow_detail = graphics_settings.mapped(|settings| &settings.shadow_detail).new_remote();
             let framerate_limit = graphics_settings.mapped(|settings| &settings.frame_limit).new_remote();
-
-
 
             #[cfg(feature = "debug")]
             let render_settings = PlainTrackedState::new(RenderSettings::new());
@@ -580,7 +578,7 @@ impl Client {
             tile_texture_group,
             chat_messages,
             main_menu_click_sound_effect,
-            map
+            map,
         }
     }
 
@@ -1348,13 +1346,11 @@ impl Client {
                         self.framerate_limit.clone_state(),
                     ),
                 ),
-                UserEvent::OpenAudioSettingsWindow => {
-                    self.interface
-                        .open_window(&self.application, &mut self.focus_state, &AudioSettingsWindow::new(
-                            self.audio_minimized.clone_state(),
-                            self.audio_login.clone_state()
-                        ))
-                }
+                UserEvent::OpenAudioSettingsWindow => self.interface.open_window(
+                    &self.application,
+                    &mut self.focus_state,
+                    &AudioSettingsWindow::new(self.audio_minimized.clone_state(), self.audio_login.clone_state()),
+                ),
                 UserEvent::OpenFriendsWindow => {
                     self.interface.open_window(
                         &self.application,
@@ -1749,8 +1745,12 @@ impl Client {
             self.interface.schedule_render();
         }
 
-        if self.audio_minimized.consume_changed() || self.audio_login.consume_changed(){
-            self.audio_engine.load_audio_settings(self.audio_settings.get().clone());
+        if self.audio_minimized.consume_changed() {
+            self.audio_engine.toggle_audio_minimized();
+        }
+
+        if self.audio_login.consume_changed() {
+            self.audio_engine.toggle_audio_login();
         }
 
         #[cfg(feature = "debug")]
@@ -1905,7 +1905,6 @@ impl Client {
                     current_camera,
                     false,
                 );
-
                 #[cfg(feature = "debug")]
                 self.map.render_markers(
                     picker_target,
@@ -2140,9 +2139,12 @@ impl Client {
                     &object_set,
                 );
 
-                #[cfg_attr(feature = "debug", korangar_debug::debug_condition(render_settings.show_entities))]
+                #[cfg_attr(feature = "debug", korangar_debug::debug_condition(render_settings.show_entities && !render_settings.use_debug_camera))]
                 self.map.render_entities(entities, deferred_target, &mut geometry_render_pass, &context.deferred_renderer, current_camera, true);
-
+                
+                #[cfg_attr(feature = "debug", korangar_debug::debug_condition(render_settings.show_entities && render_settings.use_debug_camera))]
+                self.map.render_debug_entities(entities, deferred_target, &mut geometry_render_pass, &context.deferred_renderer, current_camera, &self.player_camera, true);
+            
                 #[cfg(feature = "debug")]
                 if render_settings.show_pathing {
                     self.map.render_pathing(entities, deferred_target, &mut geometry_render_pass, &context.deferred_renderer, current_camera, &self.pathing_texture_group);
@@ -2540,6 +2542,9 @@ impl ApplicationHandler for Client {
                 if !focused {
                     self.input_system.reset();
                     self.focus_state.remove_focus();
+                    self.audio_engine.silence();
+                } else {
+                    self.audio_engine.unsilence();
                 }
             }
             WindowEvent::CursorLeft { .. } => self.mouse_cursor.hide(),

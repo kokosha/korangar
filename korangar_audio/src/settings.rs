@@ -23,6 +23,7 @@ impl Default for AudioSettings {
 /// Implement audio settings
 impl AudioSettings {
     const FILE_NAME: &'static str = "client/audio_settings.ron";
+
     /// Create new audio settings
     pub fn new() -> Self {
         Self::load().unwrap_or_else(|| {
@@ -32,6 +33,7 @@ impl AudioSettings {
             Default::default()
         })
     }
+
     /// Load audio settings
     pub fn load() -> Option<Self> {
         #[cfg(feature = "debug")]
@@ -41,6 +43,7 @@ impl AudioSettings {
             .ok()
             .and_then(|data| ron::from_str(&data).ok())
     }
+
     /// Save audio settings
     pub fn save(&self) {
         #[cfg(feature = "debug")]
