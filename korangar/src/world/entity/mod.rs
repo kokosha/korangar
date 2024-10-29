@@ -1,7 +1,7 @@
 use std::string::String;
 use std::sync::Arc;
 
-use cgmath::{Array, EuclideanSpace, Point3, Vector2, VectorSpace};
+use cgmath::{Array, EuclideanSpace, Point3, Vector2, Vector4, VectorSpace};
 use derive_new::new;
 use korangar_interface::elements::PrototypeElement;
 use korangar_interface::windows::{PrototypeWindow, Window};
@@ -750,7 +750,7 @@ impl Common {
             .render(&self.animation_state, camera_direction, self.head_direction);
         let mut index = 0;
         datas.iter().for_each(|data| {
-            let (texture, texture_coordinates, position, size, angle, mirror) = data;
+            let (texture, texture_coordinates, position, size, angle, color, mirror) = data;
             let origin = Point3::new(-position.x, position.y, 0.0);
             let scale = Vector2::from_value(0.7);
             let cell_count = Vector2::new(1, 1);
@@ -760,6 +760,7 @@ impl Common {
                 image_dimensions.x as f32 * scale.x / 10.0,
                 image_dimensions.y as f32 * scale.y / 10.0,
             );
+            let color_mult = Vector4::new(color.red, color.green, color.blue, color.alpha);
 
             let world_matrix = camera.billboard_matrix(self.position, origin, size);
             let texture_size = Vector2::new(1.0 / cell_count.x as f32, 1.0 / cell_count.y as f32);
@@ -778,6 +779,7 @@ impl Common {
                 depth_offset,
                 curvature,
                 angle: *angle,
+                color: color_mult,
                 mirror: *mirror,
                 entity_id: self.entity_id,
                 texture: texture.clone(),

@@ -13,6 +13,10 @@ struct InstanceData {
     texture_position: vec2<f32>,
     texture_size: vec2<f32>,
     depth_offset: f32,
+    depth_extra: f32,
+    angle: f32,
+    foo: f32,
+    foo_2: f32,
     curvature: f32,
     mirror: u32,
     texture_index: i32,
@@ -33,6 +37,7 @@ struct VertexOutput {
     @location(3) curvature: f32,
     @location(4) @interpolate(flat) original_depth_offset: f32,
     @location(5) @interpolate(flat) original_curvature: f32,
+    @location(6) angle: f32,
 }
 
 @group(0) @binding(1) var nearest_sampler: sampler;
@@ -51,7 +56,7 @@ fn vs_main(
     @builtin(instance_index) instance_index: u32,
 ) -> VertexOutput {
     let instance = instance_data[instance_index];
-    let vertex = vertex_data(vertex_index);
+    let vertex = vertex_data_new(vertex_index, instance_index);
 
     var output: VertexOutput;
     output.world_position = instance.world * vec4<f32>(vertex.position, 1.0);
@@ -66,12 +71,20 @@ fn vs_main(
     output.curvature = vertex.curvature_multiplier;
     output.original_depth_offset = instance.depth_offset;
     output.original_curvature = instance.curvature;
+    output.angle = instance.angle;
     return output;
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> @builtin(frag_depth) f32 {
-    let diffuse_color = textureSample(texture, nearest_sampler, input.texture_coordinates);
+    var new_input = input.texture_coordinates;
+    if abs(input.angle) > 0.0001 {
+        let sin_factor = sin(input.angle);
+        let cos_factor = cos(input.angle);
+        let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
+        new_input = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
+    } 
+    let diffuse_color = textureSample(texture, nearest_sampler, new_input);
 
     let scaled_depth_offset = pow(input.depth_offset, 2.0) * input.original_depth_offset;
     // let scaled_curvature_offset = (0.5 - pow(input.curvature, 2.0)) * input.original_curvature;
@@ -121,6 +134,50 @@ fn vertex_data(vertex_index: u32) -> Vertex {
     let curve = u * 2.0 - 1.0;
 
     return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
+}
+
+fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
+    let instance = instance_data[instance_index];
+    let depth_extra = instance.depth_extra;
+    if (vertex_index == 0) {
+        let x = instance.texture_top_left.x;
+        let y = instance.texture_top_left.y;
+        let z = 1.0;
+        let u = 0.0;
+        let v = 0.0;
+        let depth = y / 2.0 + depth_extra;
+        let curve = x;
+        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
+    }
+    else if (vertex_index == 1 || vertex_index == 4) {
+        let x = instance.texture_bottom_left.x;
+        let y = instance.texture_bottom_left.y;
+        let z = 1.0;
+        let u = 0.0;
+        let v = 1.0;
+        let depth = y / 2.0 + depth_extra;
+        let curve = x;
+        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
+    }
+    else if (vertex_index == 2 || vertex_index == 3) {
+        let x = instance.texture_top_right.x;
+        let y = instance.texture_top_right.y;
+        let z = 1.0;
+        let u = 1.0;
+        let v = 0.0;
+        let depth = y / 2.0 + depth_extra;
+        let curve = x;
+        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
+    } else {
+        let x = instance.texture_bottom_right.x;
+        let y = instance.texture_bottom_right.y;
+        let z = 1.0;
+        let u = 1.0;
+        let v = 1.0;
+        let depth = y / 2.0 + depth_extra;
+        let curve = x;
+        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
+    }
 }
 
 fn linearToNonLinear(linear_depth: f32) -> f32 {

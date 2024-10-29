@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cgmath::{Matrix4, Point3, Vector2, Vector3};
+use cgmath::{Matrix4, Point3, Vector2, Vector3, Vector4};
 use ragnarok_packets::EntityId;
 use wgpu::BlendFactor;
 
@@ -185,6 +185,7 @@ pub struct EntityInstruction {
     pub depth_offset: f32,
     pub curvature: f32,
     pub angle: f32,
+    pub color: Vector4<f32>,
     pub mirror: bool,
     pub entity_id: EntityId,
     pub texture: Arc<Texture>,

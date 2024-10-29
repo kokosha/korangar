@@ -68,10 +68,19 @@ impl SpriteLoader {
         let palette = sprite_data.palette.unwrap(); // unwrap_or_default() as soon as i know what
         // the default palette is
 
-        let rgba_images/*: Vec<Arc<ImmutableImage>>*/ = sprite_data
+        let rgba_images: Vec<_> = sprite_data
             .rgba_image_data
             .clone()
-            .into_iter();
+            .into_iter()
+            .map(|image_data| {
+                let data: Vec<_> = image_data.data.chunks_exact(4).flat_map(|w| [w[3], w[2], w[1], w[0]]).collect();
+                RgbaImageData {
+                    width: image_data.width,
+                    height: image_data.height,
+                    data,
+                }
+            })
+            .collect();
 
         // TODO: Move this to an extension trait in `korangar_loaders`.
         pub fn color_bytes(palette: &PaletteColor, index: u8) -> [u8; 4] {
@@ -98,9 +107,8 @@ impl SpriteLoader {
                 data,
             }
         });
-
-        let textures = rgba_images
-            .chain(palette_images)
+        let textures = palette_images
+            .chain(rgba_images)
             .map(|image_data| {
                 let texture = Texture::new_with_data(
                     &self.device,
@@ -125,22 +133,12 @@ impl SpriteLoader {
             })
             .collect();
 
-        // TODO: Remove the transparency
         let rgba_images: Vec<_> = sprite_data
             .rgba_image_data
             .clone()
             .into_iter()
             .map(|image_data| {
-                let data: Vec<_> = image_data
-                    .data
-                    .chunks_exact(4)
-                    .flat_map(|w| {
-                        [w[3], w[2], w[1], match w[0] {
-                            0 => 0,
-                            _ => 255,
-                        }]
-                    })
-                    .collect();
+                let data: Vec<_> = image_data.data.chunks_exact(4).flat_map(|w| [w[3], w[2], w[1], w[0]]).collect();
                 RgbaImageData {
                     width: image_data.width,
                     height: image_data.height,

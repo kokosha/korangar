@@ -71,9 +71,9 @@ impl AnimationLoader {
                         if sprite_number == -1 {
                             continue;
                         }
-                        let texture_extend = animation_pair.sprites.textures[sprite_number as usize].get_size();
-                        let mut height = texture_extend.height;
-                        let mut width = texture_extend.width;
+                        let texture_size = animation_pair.sprites.textures[sprite_number as usize].get_size();
+                        let mut height = texture_size.height;
+                        let mut width = texture_size.width;
                         // Apply color filter in the image
                         let color = match motion.sprite_clips[pos].color {
                             Some(color) => {
@@ -101,7 +101,7 @@ impl AnimationLoader {
                                 None => (1.0, 1.0).into(),
                             },
                         };
-                        if zoom == (1.0, 1.0).into() {
+                        if zoom != (1.0, 1.0).into() {
                             width = (width as f32 * zoom.x).floor() as u32;
                             height = (height as f32 * zoom.y).floor() as u32;
                         }
@@ -146,6 +146,7 @@ impl AnimationLoader {
                             size,
                             upleft: Vector2::zero(),
                             offset,
+                            remove_offset: Vector2::zero(),
                             frameparts: vec![frame_part],
                         };
                         motion_frames.push(frame);
@@ -191,7 +192,6 @@ impl AnimationLoader {
                 frames.push(frame);
             }
 
-            // TODO: Remove this code after fixing the offset
             // The problem is that the offset is not in the correct proportion
             // To solve this primarly, we created images of the same size and same offset
             // This code resize the sprites in the correct size may be used later
@@ -215,12 +215,17 @@ impl AnimationLoader {
             frames.iter_mut().for_each(|frame| {
                 let new_width = max_width;
                 let new_height = max_height;
-
-                frame.size = Vector2::<i32>::new(new_width, new_height);
+                for framepart in frame.frameparts.iter_mut() {
+                    framepart.offset.x += max_offset_x - min_offset_x + 2;
+                    framepart.offset.y += max_offset_y - min_offset_y + 2;
+                }
                 frame.offset.x = min_offset_x;
                 frame.offset.y = min_offset_y;
                 frame.offset.x += max_offset_x - min_offset_x + 2;
                 frame.offset.y += max_offset_y - min_offset_y + 2;
+                frame.size = Vector2::new(new_width, new_height);
+                frame.remove_offset.x = max_offset_x - min_offset_x + 2;
+                frame.remove_offset.y = max_offset_y - min_offset_y + 2;
             });
             animations.push(Animation { frames });
         }
@@ -278,6 +283,7 @@ pub struct Frame {
     pub offset: Vector2<i32>,
     pub upleft: Vector2<i32>,
     pub size: Vector2<i32>,
+    pub remove_offset: Vector2<i32>,
     pub frameparts: Vec<FramePart>,
 }
 
@@ -310,6 +316,7 @@ impl Frame {
                 size: Vector2::new(1, 1),
                 upleft: Vector2::zero(),
                 offset: Vector2::zero(),
+                remove_offset: Vector2::zero(),
                 frameparts: vec![frame_part],
             };
             return frame;
@@ -336,11 +343,11 @@ impl Frame {
         /* As the origin is (0,0), you get the upleft point of the retangle and
          * shift to the center, the offset is the difference between the origin and
          * this point */
-
         Frame {
             size: Vector2::new(new_width, new_height),
             upleft: Vector2::zero(),
             offset: Vector2::new(upleft_x + (new_width - 1) / 2, upleft_y + (new_height - 1) / 2),
+            remove_offset: Vector2::zero(),
             frameparts: new_frameparts,
         }
     }
@@ -379,7 +386,7 @@ impl AnimationData {
         animation_state: &AnimationState,
         camera_direction: usize,
         head_direction: usize,
-    ) -> Vec<(Arc<Texture>, Vec<Vector2<f32>>, Vector2<f32>, Vector2<i32>, f32, bool)> {
+    ) -> Vec<(Arc<Texture>, Vec<Vector2<f32>>, Vector2<f32>, Vector2<i32>, f32, Color, bool)> {
         let direction = (camera_direction + head_direction) % 8;
         let aa = animation_state.action * 8 + direction;
         let delay = self.delays[aa % self.delays.len()];
@@ -417,12 +424,12 @@ impl AnimationData {
             texture = &self.animation_pair[animation_index].sprites.textures[sprite_number];
             position = Vector2::new(
                 animation.frames[0].offset.x as f32,
-                animation.frames[0].offset.y as f32 + animation.frames[time].size.y as f32 / 2.0,
+                animation.frames[0].offset.y as f32 + ((animation.frames[time].size.y - 1) / 2) as f32,
             ) / 10.0;
 
             // Generate vertex
-            let new_vector = framepart.size;
-            let old_origin = frame.offset - (frame.size - Vector2::new(1, 1)) / 2;
+            let new_vector = framepart.size - Vector2::new(1, 1);
+            let old_origin = frame.offset - (frame.size - frame.remove_offset - Vector2::new(1, 1)) / 2;
             let new_origin = framepart.offset - (framepart.size - Vector2::new(1, 1)) / 2;
             let top_left = new_origin - old_origin;
             let bottom_left = top_left + new_vector.y * Vector2::<i32>::unit_y();
@@ -446,6 +453,7 @@ impl AnimationData {
                 position,
                 size,
                 framepart.angle,
+                framepart.color,
                 framepart.mirror,
             ));
         }

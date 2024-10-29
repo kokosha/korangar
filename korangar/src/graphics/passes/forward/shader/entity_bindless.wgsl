@@ -35,11 +35,12 @@ struct InstanceData {
     texture_bottom_right: vec2<f32>,
     texture_position: vec2<f32>,
     texture_size: vec2<f32>,
+    color: vec4<f32>,
+    depth_offset: f32,
     depth_extra: f32,
     angle: f32,
     foo: f32,
     foo_2: f32,
-    depth_offset: f32,
     curvature: f32,
     mirror: u32,
     texture_index: i32,
@@ -67,6 +68,7 @@ struct VertexOutput {
     @location(6) @interpolate(flat) original_curvature: f32,
     @location(7) texture_index: i32,
     @location(8) angle: f32,
+    @location(9) color: vec4<f32>,
 }
 
 struct FragmentOutput {
@@ -114,15 +116,19 @@ fn vs_main(
     output.original_curvature = instance.curvature;
     output.texture_index = instance.texture_index;
     output.angle = instance.angle;
+    output.color = instance.color;
     return output;
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> FragmentOutput {
-    let sin_factor = sin(input.angle);
-    let cos_factor = cos(input.angle);
-    let result = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
-    let new_input =  vec2(clamp(result.x + 0.5, 0.0, 1.0), clamp(result.y + 0.5, 0.0, 1.0));
+    var new_input = input.texture_coordinates;
+    if abs(input.angle) > 0.0001 {
+        let sin_factor = sin(input.angle);
+        let cos_factor = cos(input.angle);
+        let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
+        new_input = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
+    } 
 
     let diffuse_color = textureSample(textures[input.texture_index], linear_sampler, new_input);
 
@@ -155,7 +161,9 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     let clamped_depth = clamp(clip_position.z / clip_position.w, 0.0, 1.0);
 
     // Ambient light
-    var final_color = diffuse_color.rgb * global_uniforms.ambient_color.rgb;
+    var real_color = diffuse_color.rgb * input.color.rgb;
+    var final_color = real_color * global_uniforms.ambient_color.rgb;
+    var final_alpha = diffuse_color.a * input.color.a;
 
     // Directional light
     let light_direction = normalize(-directional_light.direction.xyz);
@@ -171,7 +179,7 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     let shadow_map_depth = textureSample(shadow_map, linear_sampler, uv);
     let visibility = select(0.0, 1.0, light_coords.z - bias < shadow_map_depth);
 
-    final_color += clamped_light * directional_light.color.rgb * diffuse_color.rgb * visibility;
+    final_color += clamped_light * directional_light.color.rgb * real_color * visibility;
 
     // Point lights
     for (var index = 0u; index < light_count; index++) {
@@ -195,7 +203,7 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     }
 
     var output: FragmentOutput;
-    output.fragment_color = vec4<f32>(final_color, 1.0);
+    output.fragment_color = vec4<f32>(final_color, final_alpha);
     output.frag_depth = clamped_depth;
     return output;
 }
@@ -254,7 +262,7 @@ fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
         let z = 1.0;
         let u = 0.0;
         let v = 0.0;
-        let depth = 1.0 - (y / 2.0) + depth_extra;
+        let depth = y / 2.0 + depth_extra;
         let curve = x;
         return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
     }
@@ -264,7 +272,7 @@ fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
         let z = 1.0;
         let u = 0.0;
         let v = 1.0;
-        let depth = 1.0 - (y / 2.0) + depth_extra;
+        let depth = y / 2.0 + depth_extra;
         let curve = x;
         return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
     }
@@ -274,7 +282,7 @@ fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
         let z = 1.0;
         let u = 1.0;
         let v = 0.0;
-        let depth = 1.0 - (y / 2.0) + depth_extra;
+        let depth = y / 2.0 + depth_extra;
         let curve = x;
         return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
     } else {
@@ -283,7 +291,7 @@ fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
         let z = 1.0;
         let u = 1.0;
         let v = 1.0;
-        let depth = 1.0 - (y / 2.0) + depth_extra;
+        let depth = y / 2.0 + depth_extra;
         let curve = x;
         return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
     }
