@@ -44,15 +44,21 @@ impl AnimationLoader {
             })
             .collect();
 
-        // The sprite is stored in animation_pair.sprites.rgba_images or
+        // The sprite is stored as rgba in animation_pair.sprites.rgba_images or
         // animation_pair.sprites.palette_images
+        // The sprite is stored as texture in animation_pair.sprites.textures
 
-        // For each animation, we collect all the framepart need to generate
+        // For each animation, we collect all the framepart need to generate the frame
         let mut animations_list: Vec<Vec<Vec<Frame>>> = Vec::new();
         let mut animation_index: usize = 0;
         let mut action_index: usize = 0;
         let mut motion_index: usize = 0;
 
+        // Each animation pair has the sprites and actions, we iterate over the
+        // animation pairs
+        // Each entity has several actions and the actions is composed of several
+        // motion, in each motion contains several pictures that we try to
+        // merge.
         for animation_pair in vec.iter() {
             action_index = 0;
             let mut animation_frames: Vec<Vec<Frame>> = Vec::new();
@@ -105,22 +111,22 @@ impl AnimationLoader {
                             width = (width as f32 * zoom.x).floor() as u32;
                             height = (height as f32 * zoom.y).floor() as u32;
                         }
-                        // Rotate the image
+                        // Get the image rotation
                         let angle = match motion.sprite_clips[pos].angle {
                             Some(value) => value as f32 / 360.0 * 2.0 * std::f32::consts::PI,
                             None => 0.0,
                         };
-
+                        // Get the offset and if the image is mirrored
                         let mut offset = motion.sprite_clips[pos].position.map(|component| component);
                         let mirror = motion.sprite_clips[pos].mirror_on != 0;
 
+                        // This is hardcoded for head in player for attach_point
+                        // animation_index == 0 is head
+                        // animation_index == 1 is body
                         let has_attach_point = match motion.attach_point_count {
                             Some(value) => value == 1,
                             None => false,
                         };
-                        // This is hardcoded for head in player for attach_point
-                        // animation_index == 0 is head
-                        // animation_index == 1 is body
                         if entity_type == EntityType::Player && has_attach_point && animation_index == 1 {
                             let parent_animation_pair = &vec[0];
                             let parent_action = &parent_animation_pair.actions.actions[action_index];
@@ -170,14 +176,14 @@ impl AnimationLoader {
 
         let mut animations: Vec<Animation> = Vec::new();
 
+        // Generate for each action, the several motions that it have and create a
+        // offset of retangles.
         for action_index in 0..action_size {
             let motion_size = vec[0].actions.actions[action_index].motions.len();
             let mut frames: Vec<Frame> = Vec::new();
             for motion_index in 0..motion_size {
                 let mut generate: Vec<Frame> = Vec::new();
 
-                // When is a player, insert the head position
-                // TODO: create a representation to map the head and body
                 for animation_pair_index in 0..animation_pair_size {
                     if animations_list[animation_pair_index].len() <= action_index {
                         continue;
@@ -192,9 +198,11 @@ impl AnimationLoader {
                 frames.push(frame);
             }
 
-            // The problem is that the offset is not in the correct proportion
+            // The problem is that the offset is not in the correct proportion and
+            // it is difficult to operate in 3D dimension.
             // To solve this primarly, we created images of the same size and same offset
-            // This code resize the sprites in the correct size may be used later
+            // This code resize the sprites in the same size and same offset
+            // Find the max_width and the min and max offset
             let mut max_width = 0;
             let mut max_height = 0;
             let mut min_offset_x = i32::MAX;
@@ -209,9 +217,12 @@ impl AnimationLoader {
                 max_offset_x = max(max_offset_x, frame.offset.x);
                 max_offset_y = max(max_offset_y, frame.offset.y);
             });
+            // The constant 2 is to avoid miscalculation by 1.
             max_width += max_offset_x - min_offset_x + 2;
             max_height += max_offset_y - min_offset_y + 2;
 
+            // Shift every frame by  max_offset_x - min_offset_x + 2
+            // As the bottom part and left part will not be in the offset.
             frames.iter_mut().for_each(|frame| {
                 let new_width = max_width;
                 let new_height = max_height;
@@ -271,7 +282,7 @@ pub struct FramePart {
     pub animation_index: i32,
     pub sprite_number: i32,
     pub offset: Vector2<i32>,
-    pub upleft: Vector2<i32>,
+    pub upleft: Vector2<i32>, // Is only used for internal calculation
     pub size: Vector2<i32>,
     pub mirror: bool,
     pub angle: f32,
@@ -283,7 +294,7 @@ pub struct Frame {
     pub offset: Vector2<i32>,
     pub upleft: Vector2<i32>,
     pub size: Vector2<i32>,
-    pub remove_offset: Vector2<i32>,
+    pub remove_offset: Vector2<i32>, // Is only used for final shift
     pub frameparts: Vec<FramePart>,
 }
 
@@ -374,6 +385,7 @@ pub struct AnimationData {
     pub entity_type: EntityType,
 }
 
+// This function generates the convertion to the big rectangle
 fn convert_coordinate(coordinate: Vector2<i32>, size: Vector2<i32>) -> Vector2<f32> {
     let x = (coordinate.x as f32 / size.x as f32 - 0.5) * 2.0;
     let y = 2.0 - (coordinate.y as f32 / size.y as f32) * 2.0;
