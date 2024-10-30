@@ -37,10 +37,7 @@ struct InstanceData {
     texture_size: vec2<f32>,
     color: vec4<f32>,
     depth_offset: f32,
-    depth_extra: f32,
     angle: f32,
-    foo: f32,
-    foo_2: f32,
     curvature: f32,
     mirror: u32,
     texture_index: i32,
@@ -122,13 +119,11 @@ fn vs_main(
 
 @fragment
 fn fs_main(input: VertexOutput) -> FragmentOutput {
-    var new_input = input.texture_coordinates;
-    if abs(input.angle) > 0.0001 {
-        let sin_factor = sin(input.angle);
-        let cos_factor = cos(input.angle);
-        let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
-        new_input = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
-    } 
+    // Apply the rotation from action
+    let sin_factor = sin(input.angle);
+    let cos_factor = cos(input.angle);
+    let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
+    let new_input = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
 
     let diffuse_color = textureSample(textures[input.texture_index], linear_sampler, new_input);
 
@@ -160,10 +155,12 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     let clip_position = global_uniforms.view_projection * adjusted_world_position;
     let clamped_depth = clamp(clip_position.z / clip_position.w, 0.0, 1.0);
 
-    // Ambient light
+    // Apply the color multiplier from the action
     var real_color = diffuse_color.rgb * input.color.rgb;
-    var final_color = real_color * global_uniforms.ambient_color.rgb;
     var final_alpha = diffuse_color.a * input.color.a;
+
+    // Ambient light
+    var final_color = real_color * global_uniforms.ambient_color.rgb;
 
     // Directional light
     let light_direction = normalize(-directional_light.direction.xyz);
@@ -252,51 +249,41 @@ fn vertex_data(vertex_index: u32) -> Vertex {
 
     return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
 }
-
+// The index is as following
+// texture_top_left = 0
+// texture_bottom_left = 1, 4
+// texture_top_right = 2, 3
+// texture_bottom_right = 5
 fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
     let instance = instance_data[instance_index];
-    let depth_extra = instance.depth_extra;
-    if (vertex_index == 0) {
-        let x = instance.texture_top_left.x;
-        let y = instance.texture_top_left.y;
-        let z = 1.0;
-        let u = 0.0;
-        let v = 0.0;
-        let depth = y / 2.0 + depth_extra;
-        let curve = x;
-        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
-    }
-    else if (vertex_index == 1 || vertex_index == 4) {
-        let x = instance.texture_bottom_left.x;
-        let y = instance.texture_bottom_left.y;
-        let z = 1.0;
-        let u = 0.0;
-        let v = 1.0;
-        let depth = y / 2.0 + depth_extra;
-        let curve = x;
-        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
-    }
-    else if (vertex_index == 2 || vertex_index == 3) {
-        let x = instance.texture_top_right.x;
-        let y = instance.texture_top_right.y;
-        let z = 1.0;
-        let u = 1.0;
-        let v = 0.0;
-        let depth = y / 2.0 + depth_extra;
-        let curve = x;
-        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
-    } else {
-        let x = instance.texture_bottom_right.x;
-        let y = instance.texture_bottom_right.y;
-        let z = 1.0;
-        let u = 1.0;
-        let v = 1.0;
-        let depth = y / 2.0 + depth_extra;
-        let curve = x;
-        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
-    }
-}
+    let index = 1u << vertex_index;
 
+    let case0 = i32((index & 0x13u) != 0u);
+    let case1 = i32((index & 0x0Du) != 0u);
+
+    // Check between texture_top_left and texture_bottom_left
+    let check1 = vertex_index == 0;
+    let x1 = select(instance.texture_bottom_left.x, instance.texture_top_left.x, check1);
+    let y1 = select(instance.texture_bottom_left.y, instance.texture_top_left.y, check1);
+
+    // Check between texture_top_right and texture_bottom_right
+    let check2 = vertex_index == 5;
+    let x2 = select(instance.texture_top_right.x, instance.texture_bottom_right.x, check2);
+    let y2 = select(instance.texture_top_right.y, instance.texture_bottom_right.y, check2);
+
+    // Check between these two options
+    let result = check2 || (vertex_index & 2) != 0; 
+    let x = select(x1, x2, result);
+    let y = select(y1, y2, result);
+    let z = 1.0;
+
+    let u = f32(1 - case0);
+    let v = f32(1 - case1);
+
+    let depth = y / 2.0;
+    let curve = x;
+    return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
+}
 
 fn rotateY(direction: vec3<f32>, angle: f32) -> vec3<f32> {
     let s = sin(angle);

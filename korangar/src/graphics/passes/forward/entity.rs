@@ -4,7 +4,6 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use bytemuck::{Pod, Zeroable};
 use hashbrown::HashMap;
-use lunify::InstructionLayout;
 use wgpu::util::StagingBelt;
 use wgpu::{
     include_wgsl, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -36,13 +35,11 @@ pub(crate) struct InstanceData {
     texture_size: [f32; 2],
     color: [f32; 4],
     depth_offset: f32,
-    depth_extra: f32,
     angle: f32,
-    foo: f32,
-    foo_2: f32,
     curvature: f32,
     mirror: u32,
     texture_index: i32,
+    padding: [u32; 3],
 }
 
 pub(crate) struct ForwardEntityDrawer {
@@ -268,14 +265,12 @@ impl Prepare for ForwardEntityDrawer {
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     color: instruction.color.into(),
-                    depth_extra: instruction.depth_extra,
                     angle: instruction.angle,
-                    foo: 0.0,
-                    foo_2: 0.0,
                     depth_offset: instruction.depth_offset,
                     curvature: instruction.curvature,
                     mirror: instruction.mirror as u32,
                     texture_index,
+                    padding: Default::default(),
                 });
 
                 texture_views.push(instruction.texture.get_texture_view());
@@ -298,14 +293,12 @@ impl Prepare for ForwardEntityDrawer {
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     color: instruction.color.into(),
-                    depth_extra: instruction.depth_extra,
                     angle: instruction.angle,
-                    foo: 0.0,
-                    foo_2: 0.0,
                     depth_offset: instruction.depth_offset,
                     curvature: instruction.curvature,
                     mirror: instruction.mirror as u32,
                     texture_index: 0,
+                    padding: Default::default(),
                 });
             }
 

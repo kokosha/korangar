@@ -34,13 +34,11 @@ struct InstanceData {
     texture_position: [f32; 2],
     texture_size: [f32; 2],
     texture_index: i32,
-    depth_extra: f32,
     angle: f32,
-    foo: f32,
-    foo_2: f32,
     mirror: u32,
     identifier_high: u32,
     identifier_low: u32,
+    padding: [u32; 3],
 }
 
 pub(crate) struct PickerEntityDrawer {
@@ -259,13 +257,11 @@ impl Prepare for PickerEntityDrawer {
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     texture_index,
-                    depth_extra: instruction.depth_extra,
                     angle: instruction.angle,
-                    foo: 0.0,
-                    foo_2: 0.0,
                     mirror: instruction.mirror as u32,
                     identifier_high,
                     identifier_low,
+                    padding: Default::default(),
                 });
 
                 texture_views.push(instruction.texture.get_texture_view());
@@ -289,13 +285,11 @@ impl Prepare for PickerEntityDrawer {
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     texture_index: 0,
-                    depth_extra: instruction.depth_extra,
                     angle: instruction.angle,
-                    foo: 0.0,
-                    foo_2: 0.0,
                     mirror: instruction.mirror as u32,
                     identifier_high,
                     identifier_low,
+                    padding: Default::default(),
                 });
             }
 

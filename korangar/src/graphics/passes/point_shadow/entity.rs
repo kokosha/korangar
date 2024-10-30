@@ -30,13 +30,11 @@ struct InstanceData {
     texture_position: [f32; 2],
     texture_size: [f32; 2],
     depth_offset: f32,
-    depth_extra: f32,
     angle: f32,
-    foo: f32,
-    foo_2: f32,
     curvature: f32,
     mirror: u32,
     texture_index: i32,
+    padding: [u32; 3],
 }
 
 pub(crate) struct PointShadowEntityDrawer {
@@ -267,13 +265,11 @@ impl Prepare for PointShadowEntityDrawer {
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     depth_offset: instruction.depth_offset,
-                    depth_extra: instruction.depth_extra,
                     angle: instruction.angle,
-                    foo: 0.0,
-                    foo_2: 0.0,
                     curvature: instruction.curvature,
                     mirror: instruction.mirror as u32,
                     texture_index,
+                    padding: Default::default(),
                 });
 
                 texture_views.push(instruction.texture.get_texture_view());
@@ -296,13 +292,11 @@ impl Prepare for PointShadowEntityDrawer {
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     depth_offset: instruction.depth_offset,
-                    depth_extra: instruction.depth_extra,
                     angle: instruction.angle,
-                    foo: 0.0,
-                    foo_2: 0.0,
                     curvature: instruction.curvature,
                     mirror: instruction.mirror as u32,
                     texture_index: 0,
+                    padding: Default::default(),
                 });
             }
 

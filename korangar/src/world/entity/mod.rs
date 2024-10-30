@@ -341,7 +341,7 @@ impl Common {
         animation_loader: &mut AnimationLoader,
     ) {
         let entity_filename: Vec<String> = get_entity_filename(script_loader, self.entity_type, self.job_id, self.sex);
-        let entity_hash = vec![self.job_id, self.sex as usize];
+        let entity_hash = vec![self.job_id, (self.sex == Sex::Female) as usize];
         self.animation_data = animation_loader
             .get(sprite_loader, action_loader, entity_filename, entity_hash, self.entity_type)
             .unwrap();
@@ -771,14 +771,13 @@ impl Common {
 
             instructions.push(EntityInstruction {
                 world: world_matrix,
-                depth_extra: index as f32 * 0.001,
                 texture_top_left: texture_coordinates[0],
                 texture_bottom_left: texture_coordinates[1],
                 texture_top_right: texture_coordinates[2],
                 texture_bottom_right: texture_coordinates[3],
                 texture_position,
                 texture_size,
-                depth_offset,
+                depth_offset: depth_offset + index as f32 * 0.001,
                 curvature,
                 angle: *angle,
                 color: color_mult,

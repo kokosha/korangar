@@ -181,7 +181,6 @@ pub struct EntityInstruction {
     pub texture_bottom_left: Vector2<f32>,
     pub texture_top_right: Vector2<f32>,
     pub texture_bottom_right: Vector2<f32>,
-    pub depth_extra: f32,
     pub depth_offset: f32,
     pub curvature: f32,
     pub angle: f32,

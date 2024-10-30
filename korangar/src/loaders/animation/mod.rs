@@ -1,9 +1,9 @@
 use std::cmp::{max, min};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use cgmath::Vector2;
 use derive_new::new;
+use hashbrown::HashMap;
 use korangar_interface::elements::PrototypeElement;
 use num::Zero;
 use wgpu::{Device, Extent3d, Queue, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages};
@@ -12,6 +12,13 @@ use super::error::LoadError;
 use crate::graphics::Texture;
 use crate::loaders::{ActionLoader, Actions, AnimationState, Sprite, SpriteLoader};
 use crate::{Color, EntityType};
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+enum AnimationKey {
+    Player { job: u32, is_female: bool },
+    Monster(u32),
+    Npc(u32),
+    Other(u32),
+}
 
 // TODO: use cache later, the memory will be increase with this hashmap, until
 // the program is out of memory.
@@ -20,7 +27,7 @@ pub struct AnimationLoader {
     device: Arc<Device>,
     queue: Arc<Queue>,
     #[new(default)]
-    cache: HashMap<usize, AnimationData>,
+    cache: HashMap<AnimationKey, AnimationData>,
 }
 
 impl AnimationLoader {
@@ -244,10 +251,13 @@ impl AnimationLoader {
             entity_type,
         };
         let hash = match entity_type {
-            EntityType::Player => 30000 + entity_hash[0] * 2 + entity_hash[1],
-            EntityType::Monster => entity_hash[0],
-            EntityType::Npc => entity_hash[0],
-            _ => entity_hash[0],
+            EntityType::Player => AnimationKey::Player {
+                job: entity_hash[0] as u32,
+                is_female: entity_hash[1] == 1,
+            },
+            EntityType::Monster => AnimationKey::Monster(entity_hash[0] as u32),
+            EntityType::Npc => AnimationKey::Npc(entity_hash[0] as u32),
+            _ => AnimationKey::Other(entity_hash[0] as u32),
         };
 
         self.cache.insert(hash, animation_data.clone());
@@ -263,10 +273,13 @@ impl AnimationLoader {
         entity_type: EntityType,
     ) -> Result<AnimationData, LoadError> {
         let hash = match entity_type {
-            EntityType::Player => 30000 + entity_hash[0] * 2 + entity_hash[1],
-            EntityType::Monster => entity_hash[0],
-            EntityType::Npc => entity_hash[0],
-            _ => entity_hash[0],
+            EntityType::Player => AnimationKey::Player {
+                job: entity_hash[0] as u32,
+                is_female: entity_hash[1] == 1,
+            },
+            EntityType::Monster => AnimationKey::Monster(entity_hash[0] as u32),
+            EntityType::Npc => AnimationKey::Npc(entity_hash[0] as u32),
+            _ => AnimationKey::Other(entity_hash[0] as u32),
         };
 
         match self.cache.get(&hash) {

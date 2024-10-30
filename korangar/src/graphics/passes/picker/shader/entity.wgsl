@@ -23,10 +23,7 @@ struct InstanceData {
     texture_position: vec2<f32>,
     texture_size: vec2<f32>,
     texture_index: i32,
-    depth_extra: f32,
     angle: f32,
-    foo: f32,
-    foo_2: f32,
     mirror: u32,
     identifier_high: u32,
     identifier_low: u32,
@@ -83,13 +80,11 @@ fn vs_main(
 
 @fragment
 fn fs_main(input: VertexOutput) ->FragmentOutput {
-    var new_input = input.texture_coordinates;
-    if abs(input.angle) > 0.0001 {
-        let sin_factor = sin(input.angle);
-        let cos_factor = cos(input.angle);
-        let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
-        new_input = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
-    } 
+    // Apply the rotation from action
+    let sin_factor = sin(input.angle);
+    let cos_factor = cos(input.angle);
+    let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
+    let new_input = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
     let diffuse_color = textureSample(texture, nearest_sampler, new_input);
 
     if (diffuse_color.a != 1.0) {
@@ -135,40 +130,38 @@ fn vertex_data(vertex_index: u32) -> Vertex {
     return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
 }
 
+// The index is as following
+// texture_top_left = 0
+// texture_bottom_left = 1, 4
+// texture_top_right = 2, 3
+// texture_bottom_right = 5
 fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
     let instance = instance_data[instance_index];
-    let depth_extra = instance.depth_extra;
-    if (vertex_index == 0) {
-        let x = instance.texture_top_left.x;
-        let y = instance.texture_top_left.y;
-        let z = 1.0;
-        let u = 0.0;
-        let v = 0.0;
-        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
-    }
-    else if (vertex_index == 1 || vertex_index == 4) {
-        let x = instance.texture_bottom_left.x;
-        let y = instance.texture_bottom_left.y;
-        let z = 1.0;
-        let u = 0.0;
-        let v = 1.0;
-        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
-    }
-    else if (vertex_index == 2 || vertex_index == 3) {
-        let x = instance.texture_top_right.x;
-        let y = instance.texture_top_right.y;
-        let z = 1.0;
-        let u = 1.0;
-        let v = 0.0;
-        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
-    } else {
-        let x = instance.texture_bottom_right.x;
-        let y = instance.texture_bottom_right.y;
-        let z = 1.0;
-        let u = 1.0;
-        let v = 1.0;
-        return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
-    }
+    let index = 1u << vertex_index;
+
+    let case0 = i32((index & 0x13u) != 0u);
+    let case1 = i32((index & 0x0Du) != 0u);
+
+    // Check between texture_top_left and texture_bottom_left
+    let check1 = vertex_index == 0;
+    let x1 = select(instance.texture_bottom_left.x, instance.texture_top_left.x, check1);
+    let y1 = select(instance.texture_bottom_left.y, instance.texture_top_left.y, check1);
+
+    // Check between texture_top_right and texture_bottom_right
+    let check2 = vertex_index == 5;
+    let x2 = select(instance.texture_top_right.x, instance.texture_bottom_right.x, check2);
+    let y2 = select(instance.texture_top_right.y, instance.texture_bottom_right.y, check2);
+
+    // Check between these two options
+    let result = check2 || (vertex_index & 2) != 0; 
+    let x = select(x1, x2, result);
+    let y = select(y1, y2, result);
+    let z = 1.0;
+
+    let u = f32(1 - case0);
+    let v = f32(1 - case1);
+
+    return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
 }
 
 fn linearToNonLinear(linear_depth: f32) -> f32 {
