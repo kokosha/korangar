@@ -1,4 +1,3 @@
-use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -21,10 +20,6 @@ use crate::loaders::GameFileLoader;
 pub struct Sprite {
     #[hidden_element]
     pub textures: Vec<Arc<Texture>>,
-    pub rgba_count: u16,
-    pub palette_count: u16,
-    pub rgba_images: Vec<RgbaImageData>,
-    pub palette_images: Vec<RgbaImageData>,
     #[cfg(feature = "debug")]
     sprite_data: SpriteData,
 }
@@ -66,14 +61,17 @@ impl SpriteLoader {
         let cloned_sprite_data = sprite_data.clone();
 
         let palette = sprite_data.palette.unwrap(); // unwrap_or_default() as soon as i know what
-        // the default palette is
 
-        let rgba_images: Vec<_> = sprite_data
+        let rgba_images: Vec<RgbaImageData> = sprite_data
             .rgba_image_data
-            .clone()
-            .into_iter()
+            .iter()
             .map(|image_data| {
-                let data: Vec<_> = image_data.data.chunks_exact(4).flat_map(|w| [w[3], w[2], w[1], w[0]]).collect();
+                // Convert the pixel from ABGR format to RGBA format
+                let data: Vec<_> = image_data
+                    .data
+                    .chunks_exact(4)
+                    .flat_map(|pixel| [pixel[3], pixel[2], pixel[1], pixel[0]])
+                    .collect();
                 RgbaImageData {
                     width: image_data.width,
                     height: image_data.height,
@@ -92,8 +90,8 @@ impl SpriteLoader {
             [palette.red, palette.green, palette.blue, alpha]
         }
 
-        let palette_images = sprite_data.palette_image_data.clone().into_iter().map(|image_data| {
-            // decode palette image data if necessary
+        let palette_images = sprite_data.palette_image_data.iter().map(|image_data| {
+            // Decode palette image data if necessary
             let data: Vec<u8> = image_data
                 .data
                 .0
@@ -133,47 +131,8 @@ impl SpriteLoader {
             })
             .collect();
 
-        let rgba_images: Vec<_> = sprite_data
-            .rgba_image_data
-            .clone()
-            .into_iter()
-            .map(|image_data| {
-                let data: Vec<_> = image_data.data.chunks_exact(4).flat_map(|w| [w[3], w[2], w[1], w[0]]).collect();
-                RgbaImageData {
-                    width: image_data.width,
-                    height: image_data.height,
-                    data,
-                }
-            })
-            .collect();
-
-        let palette_images: Vec<_> = sprite_data
-            .palette_image_data
-            .clone()
-            .into_iter()
-            .map(|image_data| {
-                // decode palette image data if necessary
-                let data: Vec<u8> = image_data
-                    .data
-                    .0
-                    .iter()
-                    .flat_map(|palette_index| color_bytes(&palette.colors[*palette_index as usize], *palette_index))
-                    .collect();
-
-                RgbaImageData {
-                    width: image_data.width,
-                    height: image_data.height,
-                    data,
-                }
-            })
-            .collect();
-
         let sprite = Arc::new(Sprite {
             textures,
-            rgba_count: rgba_images.len() as u16,
-            palette_count: palette_images.len() as u16,
-            rgba_images,
-            palette_images,
             #[cfg(feature = "debug")]
             sprite_data: cloned_sprite_data,
         });
