@@ -297,11 +297,12 @@ impl Common {
             1000..=3999 | 20000..=29999 => EntityType::Monster,
             _ => EntityType::Npc,
         };
+        let entity_hash = vec![job_id, sex as usize];
 
         let entity_filename: Vec<String> = get_entity_filename(script_loader, entity_type, job_id, sex);
         // generate animation
         let animation_data = animation_loader
-            .get(sprite_loader, action_loader, entity_filename, entity_type)
+            .get(sprite_loader, action_loader, entity_filename, entity_hash, entity_type)
             .unwrap();
         let details = ResourceState::Unavailable;
         let animation_state = AnimationState::new(client_tick);
@@ -340,8 +341,9 @@ impl Common {
         animation_loader: &mut AnimationLoader,
     ) {
         let entity_filename: Vec<String> = get_entity_filename(script_loader, self.entity_type, self.job_id, self.sex);
+        let entity_hash = vec![self.job_id, self.sex as usize];
         self.animation_data = animation_loader
-            .get(sprite_loader, action_loader, entity_filename, self.entity_type)
+            .get(sprite_loader, action_loader, entity_filename, entity_hash, self.entity_type)
             .unwrap();
     }
 

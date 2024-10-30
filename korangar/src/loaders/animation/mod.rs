@@ -20,11 +20,7 @@ pub struct AnimationLoader {
     device: Arc<Device>,
     queue: Arc<Queue>,
     #[new(default)]
-    // The string will be type of entity
-    // 0_{body_id}_{head_id}
-    // 1_{monster_id}
-    // 2_{npc_id}
-    cache: HashMap<String, AnimationData>,
+    cache: HashMap<usize, AnimationData>,
 }
 
 impl AnimationLoader {
@@ -33,6 +29,7 @@ impl AnimationLoader {
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         entity_filename: Vec<String>,
+        entity_hash: Vec<usize>,
         entity_type: EntityType,
     ) -> Result<AnimationData, LoadError> {
         // Create animation pair with sprite and action
@@ -247,12 +244,13 @@ impl AnimationLoader {
             entity_type,
         };
         let hash = match entity_type {
-            EntityType::Player => format!("0_{}_{}", entity_filename[0], entity_filename[1]),
-            EntityType::Monster => format!("1_{}", entity_filename[0]),
-            EntityType::Npc => format!("2_{}", entity_filename[0]),
-            _ => format!("3"),
+            EntityType::Player => 30000 + entity_hash[0] * 2 + entity_hash[1],
+            EntityType::Monster => entity_hash[0],
+            EntityType::Npc => entity_hash[0],
+            _ => entity_hash[0],
         };
-        self.cache.insert(hash.clone(), animation_data.clone());
+
+        self.cache.insert(hash, animation_data.clone());
         Ok(animation_data)
     }
 
@@ -261,18 +259,19 @@ impl AnimationLoader {
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         entity_filename: Vec<String>,
+        entity_hash: Vec<usize>,
         entity_type: EntityType,
     ) -> Result<AnimationData, LoadError> {
         let hash = match entity_type {
-            EntityType::Player => format!("0_{}_{}", entity_filename[0], entity_filename[1]),
-            EntityType::Monster => format!("1_{}", entity_filename[0]),
-            EntityType::Npc => format!("2_{}", entity_filename[0]),
-            _ => format!("3"),
+            EntityType::Player => 30000 + entity_hash[0] * 2 + entity_hash[1],
+            EntityType::Monster => entity_hash[0],
+            EntityType::Npc => entity_hash[0],
+            _ => entity_hash[0],
         };
 
         match self.cache.get(&hash) {
             Some(animation_data) => Ok(animation_data.clone()),
-            None => self.load(sprite_loader, action_loader, entity_filename, entity_type),
+            None => self.load(sprite_loader, action_loader, entity_filename, entity_hash, entity_type),
         }
     }
 }
