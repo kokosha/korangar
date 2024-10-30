@@ -172,14 +172,14 @@ impl AnimationLoader {
             for motion_index in 0..motion_size {
                 let mut generate: Vec<Frame> = Vec::new();
 
-                for animation_pair_index in 0..animation_pair_size {
-                    if animations_list[animation_pair_index].len() <= action_index {
+                for pair in &animations_list[0..animation_pair_size] {
+                    if pair.len() <= action_index {
                         continue;
                     }
-                    if animations_list[animation_pair_index][action_index].len() <= motion_index {
+                    if pair[action_index].len() <= motion_index {
                         continue;
                     }
-                    generate.push(animations_list[animation_pair_index][action_index][motion_index].clone());
+                    generate.push(pair[action_index][motion_index].clone());
                 }
                 let frame = Frame::merge_frame(&mut generate);
 
