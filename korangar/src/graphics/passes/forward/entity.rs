@@ -4,6 +4,7 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use bytemuck::{Pod, Zeroable};
 use hashbrown::HashMap;
+use lunify::InstructionLayout;
 use wgpu::util::StagingBelt;
 use wgpu::{
     include_wgsl, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -14,7 +15,7 @@ use wgpu::{
 };
 
 use crate::graphics::passes::{
-    BindGroupCount, ColorAttachmentCount, DepthAttachmentCount, Drawer, ForwardRenderPassContext, RenderPassContext,
+    interface, BindGroupCount, ColorAttachmentCount, DepthAttachmentCount, Drawer, ForwardRenderPassContext, RenderPassContext,
 };
 use crate::graphics::{Buffer, Capabilities, EntityInstruction, GlobalContext, Prepare, RenderInstruction, Texture};
 
@@ -27,8 +28,16 @@ const INITIAL_INSTRUCTION_SIZE: usize = 256;
 #[repr(C)]
 pub(crate) struct InstanceData {
     world: [[f32; 4]; 4],
+    texture_top_left: [f32; 2],
+    texture_bottom_left: [f32; 2],
+    texture_top_right: [f32; 2],
+    texture_bottom_right: [f32; 2],
     texture_position: [f32; 2],
     texture_size: [f32; 2],
+    depth_extra: f32,
+    angle: f32,
+    foo: f32,
+    foo_2: f32,
     depth_offset: f32,
     curvature: f32,
     mirror: u32,
@@ -251,8 +260,16 @@ impl Prepare for ForwardEntityDrawer {
 
                 self.instance_data.push(InstanceData {
                     world: instruction.world.into(),
+                    texture_top_left: instruction.texture_top_left.into(),
+                    texture_bottom_left: instruction.texture_bottom_left.into(),
+                    texture_top_right: instruction.texture_top_right.into(),
+                    texture_bottom_right: instruction.texture_bottom_right.into(),
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
+                    depth_extra: instruction.depth_extra,
+                    angle: instruction.angle,
+                    foo: instruction.depth_extra,
+                    foo_2: instruction.depth_extra,
                     depth_offset: instruction.depth_offset,
                     curvature: instruction.curvature,
                     mirror: instruction.mirror as u32,
@@ -272,8 +289,16 @@ impl Prepare for ForwardEntityDrawer {
             for instruction in instructions.entities.iter() {
                 self.instance_data.push(InstanceData {
                     world: instruction.world.into(),
+                    texture_top_left: instruction.texture_top_left.into(),
+                    texture_bottom_left: instruction.texture_bottom_left.into(),
+                    texture_top_right: instruction.texture_top_right.into(),
+                    texture_bottom_right: instruction.texture_bottom_right.into(),
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
+                    depth_extra: instruction.depth_extra,
+                    angle: instruction.angle,
+                    foo: instruction.depth_extra,
+                    foo_2: instruction.depth_extra,
                     depth_offset: instruction.depth_offset,
                     curvature: instruction.curvature,
                     mirror: instruction.mirror as u32,

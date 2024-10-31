@@ -1,16 +1,14 @@
 use std::string::String;
 use std::sync::Arc;
 
-use cgmath::{Array, EuclideanSpace, InnerSpace, Point3, Vector2, VectorSpace};
+use cgmath::{Array, EuclideanSpace, Point3, Vector2, VectorSpace};
 use derive_new::new;
-use image::{save_buffer, RgbaImage};
 use korangar_interface::elements::PrototypeElement;
 use korangar_interface::windows::{PrototypeWindow, Window};
 use korangar_networking::EntityData;
 #[cfg(feature = "debug")]
 use korangar_util::texture_atlas::AtlasAllocation;
 use ragnarok_formats::map::TileFlags;
-use ragnarok_formats::sprite::RgbaImageData;
 use ragnarok_packets::{AccountId, CharacterInformation, ClientTick, EntityId, Sex, StatusType, WorldPosition};
 #[cfg(feature = "debug")]
 use wgpu::{BufferUsages, Device, Queue};
@@ -20,9 +18,7 @@ use crate::interface::application::InterfaceSettings;
 use crate::interface::layout::{ScreenPosition, ScreenSize};
 use crate::interface::theme::GameTheme;
 use crate::interface::windows::WindowCache;
-use crate::loaders::{
-    ActionLoader, Actions, AnimationData, AnimationLoader, AnimationPair, AnimationState, ScriptLoader, Sprite, SpriteLoader,
-};
+use crate::loaders::{ActionLoader, AnimationData, AnimationLoader, AnimationState, ScriptLoader, SpriteLoader};
 use crate::renderer::GameInterfaceRenderer;
 #[cfg(feature = "debug")]
 use crate::renderer::MarkerRenderer;
@@ -749,37 +745,44 @@ impl Common {
 
     pub fn render(&self, instructions: &mut Vec<EntityInstruction>, camera: &dyn Camera) {
         let camera_direction = camera.camera_direction();
-        let (texture, position, mirror) = self
+        let datas = self
             .animation_data
             .render(&self.animation_state, camera_direction, self.head_direction);
+        let mut index = 0;
+        datas.iter().for_each(|data| {
+            let (texture, texture_coordinates, position, size, angle, mirror) = data;
+            let origin = Point3::new(-position.x, position.y, 0.0);
+            let scale = Vector2::from_value(0.7);
+            let cell_count = Vector2::new(1, 1);
+            let cell_position = Vector2::new(0, 0);
+            let image_dimensions = size;
+            let size = Vector2::new(
+                image_dimensions.x as f32 * scale.x / 10.0,
+                image_dimensions.y as f32 * scale.y / 10.0,
+            );
 
-        let view_direction = camera.view_direction();
-        let right_vector = camera.look_up_vector().cross(view_direction).normalize();
+            let world_matrix = camera.billboard_matrix(self.position, origin, size);
+            let texture_size = Vector2::new(1.0 / cell_count.x as f32, 1.0 / cell_count.y as f32);
+            let texture_position = Vector2::new(texture_size.x * cell_position.x as f32, texture_size.y * cell_position.y as f32);
+            let (depth_offset, curvature) = camera.calculate_depth_offset_and_curvature(&world_matrix, scale.x, scale.y);
 
-        let origin = Point3::new(0.0, position.y, 0.0) - position.x * right_vector;
-        let scale = Vector2::from_value(0.7);
-        let cell_count = Vector2::new(1, 1);
-        let cell_position = Vector2::new(0, 0);
-        let image_dimensions = texture.get_size();
-        let size = Vector2::new(
-            image_dimensions.width as f32 * scale.x / 10.0,
-            image_dimensions.height as f32 * scale.y / 10.0,
-        );
-
-        let world_matrix = camera.billboard_matrix(self.position, origin, size);
-        let texture_size = Vector2::new(1.0 / cell_count.x as f32, 1.0 / cell_count.y as f32);
-        let texture_position = Vector2::new(texture_size.x * cell_position.x as f32, texture_size.y * cell_position.y as f32);
-        let (depth_offset, curvature) = camera.calculate_depth_offset_and_curvature(&world_matrix, scale.x, scale.y);
-
-        instructions.push(EntityInstruction {
-            world: world_matrix,
-            texture_position,
-            texture_size,
-            depth_offset,
-            curvature,
-            mirror,
-            entity_id: self.entity_id,
-            texture,
+            instructions.push(EntityInstruction {
+                world: world_matrix,
+                depth_extra: index as f32 * 0.001,
+                texture_top_left: texture_coordinates[0],
+                texture_bottom_left: texture_coordinates[1],
+                texture_top_right: texture_coordinates[2],
+                texture_bottom_right: texture_coordinates[3],
+                texture_position,
+                texture_size,
+                depth_offset,
+                curvature,
+                angle: *angle,
+                mirror: *mirror,
+                entity_id: self.entity_id,
+                texture: texture.clone(),
+            });
+            index += 1;
         });
     }
 

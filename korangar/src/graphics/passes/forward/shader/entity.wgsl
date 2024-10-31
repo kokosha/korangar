@@ -29,8 +29,16 @@ struct PointLight {
 
 struct InstanceData {
     world: mat4x4<f32>,
+    texture_top_left: vec2<f32>,
+    texture_bottom_left: vec2<f32>,
+    texture_top_right: vec2<f32>,
+    texture_bottom_right: vec2<f32>,
     texture_position: vec2<f32>,
     texture_size: vec2<f32>,
+    depth_extra: f32,
+    angle: f32,
+    foo: f32,
+    foo_2: f32,
     depth_offset: f32,
     curvature: f32,
     mirror: u32,
