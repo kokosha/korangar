@@ -342,7 +342,7 @@ impl Client {
             let mut sprite_loader = SpriteLoader::new(device.clone(), queue.clone(), game_file_loader.clone());
             let mut action_loader = ActionLoader::new(game_file_loader.clone());
             let effect_loader = EffectLoader::new(game_file_loader.clone());
-            let animation_loader = AnimationLoader::new(device.clone(), queue.clone());
+            let animation_loader = AnimationLoader::new();
 
             let script_loader = ScriptLoader::new(&game_file_loader).unwrap_or_else(|_| {
                 // The scrip loader not being created correctly means that the lua files were

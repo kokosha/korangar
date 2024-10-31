@@ -1,7 +1,7 @@
 use std::string::String;
 use std::sync::Arc;
 
-use cgmath::{Array, EuclideanSpace, Point3, Vector2, Vector4, VectorSpace};
+use cgmath::{EuclideanSpace, Point3, Vector2, VectorSpace};
 use derive_new::new;
 use korangar_interface::elements::PrototypeElement;
 use korangar_interface::windows::{PrototypeWindow, Window};
@@ -18,13 +18,13 @@ use crate::interface::application::InterfaceSettings;
 use crate::interface::layout::{ScreenPosition, ScreenSize};
 use crate::interface::theme::GameTheme;
 use crate::interface::windows::WindowCache;
-use crate::loaders::{ActionLoader, AnimationData, AnimationLoader, AnimationState, ScriptLoader, SpriteLoader};
+use crate::loaders::{ActionLoader, AnimationLoader, AnimationState, ScriptLoader, SpriteLoader};
 use crate::renderer::GameInterfaceRenderer;
 #[cfg(feature = "debug")]
 use crate::renderer::MarkerRenderer;
-use crate::world::Map;
 #[cfg(feature = "debug")]
 use crate::world::MarkerIdentifier;
+use crate::world::{AnimationData, Map};
 #[cfg(feature = "debug")]
 use crate::{Buffer, ModelVertex};
 
@@ -76,7 +76,7 @@ pub struct Common {
     #[hidden_element]
     pub entity_type: EntityType,
     pub active_movement: Option<Movement>,
-    pub animation_data: AnimationData,
+    pub animation_data: Arc<AnimationData>,
     pub grid_position: Vector2<usize>,
     pub position: Point3<f32>,
     #[hidden_element]
@@ -236,13 +236,12 @@ fn get_sprite_path_for_player_job(job_id: usize) -> &'static str {
     }
 }
 
-// This part instead of generating the sprite and actions, you need to generate
-// the animation_loader.
-fn get_entity_filename(script_loader: &ScriptLoader, entity_type: EntityType, job_id: usize, sex: Sex) -> Vec<String> {
+fn get_entity_part_files(script_loader: &ScriptLoader, entity_type: EntityType, job_id: usize, sex: Sex) -> Vec<String> {
     let sex_sprite_path = match sex == Sex::Female {
         true => "¿©",
         false => "³²",
     };
+
     fn player_body_path(sex_sprite_path: &str, job_id: usize) -> String {
         format!(
             "ÀÎ°£Á·\\¸öÅë\\{}\\{}_{}",
@@ -251,17 +250,17 @@ fn get_entity_filename(script_loader: &ScriptLoader, entity_type: EntityType, jo
             sex_sprite_path
         )
     }
+
     fn player_head_path(sex_sprite_path: &str, head_id: usize) -> String {
         format!("ÀÎ°£Á·\\¸Ó¸®Åë\\{}\\{}_{}", sex_sprite_path, head_id, sex_sprite_path)
     }
-    let entity_filename = match entity_type {
+
+    match entity_type {
         EntityType::Player => vec![player_body_path(sex_sprite_path, job_id), player_head_path(sex_sprite_path, 32)],
         EntityType::Npc => vec![format!("npc\\{}", script_loader.get_job_name_from_id(job_id))],
         EntityType::Monster => vec![format!("¸ó½ºÅÍ\\{}", script_loader.get_job_name_from_id(job_id))],
         EntityType::Warp | EntityType::Hidden => vec![format!("npc\\{}", script_loader.get_job_name_from_id(job_id))], // TODO: change
-    };
-
-    entity_filename
+    }
 }
 
 impl Common {
@@ -297,12 +296,10 @@ impl Common {
             1000..=3999 | 20000..=29999 => EntityType::Monster,
             _ => EntityType::Npc,
         };
-        let entity_hash = vec![job_id, sex as usize];
 
-        let entity_filename: Vec<String> = get_entity_filename(script_loader, entity_type, job_id, sex);
-        // generate animation
+        let entity_part_files = get_entity_part_files(script_loader, entity_type, job_id, sex);
         let animation_data = animation_loader
-            .get(sprite_loader, action_loader, entity_filename, entity_hash, entity_type)
+            .get(sprite_loader, action_loader, entity_type, &entity_part_files)
             .unwrap();
         let details = ResourceState::Unavailable;
         let animation_state = AnimationState::new(client_tick);
@@ -340,10 +337,9 @@ impl Common {
         script_loader: &ScriptLoader,
         animation_loader: &mut AnimationLoader,
     ) {
-        let entity_filename: Vec<String> = get_entity_filename(script_loader, self.entity_type, self.job_id, self.sex);
-        let entity_hash = vec![self.job_id, (self.sex == Sex::Female) as usize];
+        let entity_part_files = get_entity_part_files(script_loader, self.entity_type, self.job_id, self.sex);
         self.animation_data = animation_loader
-            .get(sprite_loader, action_loader, entity_filename, entity_hash, self.entity_type)
+            .get(sprite_loader, action_loader, self.entity_type, &entity_part_files)
             .unwrap();
     }
 
@@ -746,47 +742,14 @@ impl Common {
     }
 
     pub fn render(&self, instructions: &mut Vec<EntityInstruction>, camera: &dyn Camera) {
-        let camera_direction = camera.camera_direction();
-        let datas = self
-            .animation_data
-            .render(&self.animation_state, camera_direction, self.head_direction);
-        let mut index = 0;
-        datas.iter().for_each(|data| {
-            let (texture, texture_coordinates, position, size, angle, color, mirror) = data;
-            let origin = Point3::new(-position.x, position.y, 0.0);
-            let scale = Vector2::from_value(0.7);
-            let cell_count = Vector2::new(1, 1);
-            let cell_position = Vector2::new(0, 0);
-            let image_dimensions = size;
-            let size = Vector2::new(
-                image_dimensions.x as f32 * scale.x / 10.0,
-                image_dimensions.y as f32 * scale.y / 10.0,
-            );
-            let color_mult = Vector4::new(color.red, color.green, color.blue, color.alpha);
-
-            let world_matrix = camera.billboard_matrix(self.position, origin, size);
-            let texture_size = Vector2::new(1.0 / cell_count.x as f32, 1.0 / cell_count.y as f32);
-            let texture_position = Vector2::new(texture_size.x * cell_position.x as f32, texture_size.y * cell_position.y as f32);
-            let (depth_offset, curvature) = camera.calculate_depth_offset_and_curvature(&world_matrix, scale.x, scale.y);
-
-            instructions.push(EntityInstruction {
-                world: world_matrix,
-                texture_top_left: texture_coordinates[0],
-                texture_bottom_left: texture_coordinates[1],
-                texture_top_right: texture_coordinates[2],
-                texture_bottom_right: texture_coordinates[3],
-                texture_position,
-                texture_size,
-                depth_offset: depth_offset + index as f32 * 0.001,
-                curvature,
-                angle: *angle,
-                color: color_mult,
-                mirror: *mirror,
-                entity_id: self.entity_id,
-                texture: texture.clone(),
-            });
-            index += 1;
-        });
+        self.animation_data.render(
+            instructions,
+            camera,
+            self.entity_id,
+            self.position,
+            &self.animation_state,
+            self.head_direction,
+        );
     }
 
     #[cfg(feature = "debug")]

@@ -14,7 +14,7 @@ use wgpu::{
 };
 
 use crate::graphics::passes::{
-    interface, BindGroupCount, ColorAttachmentCount, DepthAttachmentCount, Drawer, ForwardRenderPassContext, RenderPassContext,
+    BindGroupCount, ColorAttachmentCount, DepthAttachmentCount, Drawer, ForwardRenderPassContext, RenderPassContext,
 };
 use crate::graphics::{Buffer, Capabilities, EntityInstruction, GlobalContext, Prepare, RenderInstruction, Texture};
 
@@ -264,7 +264,7 @@ impl Prepare for ForwardEntityDrawer {
                     texture_bottom_right: instruction.texture_bottom_right.into(),
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
-                    color: instruction.color.into(),
+                    color: instruction.color.components_linear(),
                     angle: instruction.angle,
                     depth_offset: instruction.depth_offset,
                     curvature: instruction.curvature,
@@ -292,7 +292,7 @@ impl Prepare for ForwardEntityDrawer {
                     texture_bottom_right: instruction.texture_bottom_right.into(),
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
-                    color: instruction.color.into(),
+                    color: instruction.color.components_linear(),
                     angle: instruction.angle,
                     depth_offset: instruction.depth_offset,
                     curvature: instruction.curvature,

@@ -80,9 +80,9 @@ fn fs_main(input: VertexOutput) -> @builtin(frag_depth) f32 {
     let sin_factor = sin(input.angle);
     let cos_factor = cos(input.angle);
     let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
-    let new_input = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
+    let texture_coordinates = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
     
-    let diffuse_color = textureSample(textures[input.texture_index], nearest_sampler, new_input);
+    let diffuse_color = textureSample(textures[input.texture_index], nearest_sampler, texture_coordinates);
 
     let scaled_depth_offset = pow(input.depth_offset, 2.0) * input.original_depth_offset;
     // let scaled_curvature_offset = (0.5 - pow(input.curvature, 2.0)) * input.original_curvature;

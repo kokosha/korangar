@@ -120,9 +120,9 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     let sin_factor = sin(input.angle);
     let cos_factor = cos(input.angle);
     let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
-    let new_input = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
+    let texture_coordinates = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
 
-    let diffuse_color = textureSample(texture, linear_sampler, new_input);
+    let diffuse_color = textureSample(texture, linear_sampler, texture_coordinates);
 
     // Calculate which tile this fragment belongs to
     let pixel_position = vec2<u32>(floor(input.position.xy));
@@ -154,11 +154,11 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
 
 
     // Apply the color multiplier from the action
-    var real_color = diffuse_color.rgb * input.color.rgb;
+    var base_color = diffuse_color.rgb * input.color.rgb;
     var final_alpha = diffuse_color.a * input.color.a;
 
     // Ambient light
-    var final_color = real_color * global_uniforms.ambient_color.rgb;
+    var final_color = base_color * global_uniforms.ambient_color.rgb;
 
     // Directional light
     let light_direction = normalize(-directional_light.direction.xyz);
@@ -174,7 +174,7 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     let shadow_map_depth = textureSample(shadow_map, linear_sampler, uv);
     let visibility = select(0.0, 1.0, light_coords.z - bias < shadow_map_depth);
 
-    final_color += clamped_light * directional_light.color.rgb * real_color * visibility;
+    final_color += clamped_light * directional_light.color.rgb * base_color * visibility;
 
     // Point lights
     for (var index = 0u; index < light_count; index++) {
