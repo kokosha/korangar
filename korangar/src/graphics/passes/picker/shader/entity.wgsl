@@ -103,15 +103,19 @@ fn fs_main(input: VertexOutput) ->FragmentOutput {
     return output;
 }
 
+// TODO: The function vertex_data is currently unutilized in the shader.
+// I will leave the function here because vertex generation truth table is really optimized.
+// Later I will check if it is possible to set the frame part directly using matrix transformation,
+// instead of generating the vertex in the vertex fragment.
 // Optimized version of the following truth table:
 //
 // vertex_index  x  y  z  u  v
-// 0            -1  2  0  1  0
-// 1            -1  0  0  1  1
-// 2             1  2  0  0  0
-// 3             1  2  0  0  0
-// 4            -1  0  0  1  1
-// 5             1  0  0  0  1
+// 0            -1  2  0  0  0
+// 1            -1  0  0  0  1
+// 2             1  2  0  1  0
+// 3             1  2  0  1  0
+// 4            -1  0  0  0  1
+// 5             1  0  0  1  1
 //
 // (x,y,z) are the vertex position
 // (u,v) are the UV coordinates
@@ -130,11 +134,36 @@ fn vertex_data(vertex_index: u32) -> Vertex {
     return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
 }
 
-// The index is as following
-// texture_top_left = 0
-// texture_bottom_left = 1, 4
-// texture_top_right = 2, 3
-// texture_bottom_right = 5
+// Truth table of the bounding-box frame:
+//
+// vertex_index  x  y  z  u  v 
+// 0            -1  2  0  0  0
+// 1            -1  0  0  0  1
+// 2             1  2  0  1  0
+// 3             1  2  0  1  0
+// 4            -1  0  0  0  1
+// 5             1  0  0  1  1
+//
+// (x,y,z) are the vertex position
+// (u,v) are the UV coordinates
+//
+// The following terms will be abreviated
+// texture_top_left (tl)
+// texture_bottom_left (bl)
+// texture_top_right (tr)
+// texture_bottom_right (br) 
+// Truth table of the frame part:
+//
+// vertex_index  x     y     z  u  v
+// 0             tl.x  tl.y  0  0  0
+// 1             bl.x  bl.y  0  0  1 
+// 2             tr.x  tr.y  0  1  0
+// 3             tr.x  tr.y  0  1  0
+// 4             bl.x  bl.y  0  0  1
+// 5             br.x  br.y  0  1  1
+//
+// (x,y,z) are the vertex position
+// (u,v) are the UV coordinates
 fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
     let instance = instance_data[instance_index];
     let index = 1u << vertex_index;
@@ -156,7 +185,7 @@ fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
     let result = check2 || (vertex_index & 2) != 0; 
     let x = select(x1, x2, result);
     let y = select(y1, y2, result);
-    let z = 1.0;
+    let z = 0.0;
 
     let u = f32(1 - case0);
     let v = f32(1 - case1);
