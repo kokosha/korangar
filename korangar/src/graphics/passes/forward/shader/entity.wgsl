@@ -76,7 +76,9 @@ struct FragmentOutput {
 const TILE_SIZE: u32 = 16;
 
 @group(0) @binding(0) var<uniform> global_uniforms: GlobalUniforms;
+@group(0) @binding(1) var nearest_sampler: sampler;
 @group(0) @binding(2) var linear_sampler: sampler;
+@group(0) @binding(3) var texture_sampler: sampler;
 @group(1) @binding(0) var<uniform> directional_light: DirectionalLightUniforms;
 @group(1) @binding(1) var shadow_map: texture_depth_2d;
 @group(1) @binding(2) var<storage, read> point_lights: array<PointLight>;
@@ -122,8 +124,12 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     let cos_factor = cos(input.angle);
     let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
     let texture_coordinates = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
-
-    let diffuse_color = textureSample(texture, linear_sampler, texture_coordinates);
+    
+    let diffuse_color = textureSample(texture, texture_sampler, texture_coordinates);
+    let alpha_channel = textureSample(texture, nearest_sampler, texture_coordinates).a;
+    if (alpha_channel == 0.0) {
+        discard;
+    }
 
     // Calculate which tile this fragment belongs to
     let pixel_position = vec2<u32>(floor(input.position.xy));
@@ -135,7 +141,7 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     // Get the number of lights affecting this tile
     let light_count = textureLoad(light_count_texture, vec2<u32>(tile_x, tile_y), 0).r;
 
-    if (diffuse_color.a < 0.6) {
+    if (diffuse_color.a == 0.0) {
         discard;
     }
 
