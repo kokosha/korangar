@@ -89,8 +89,8 @@ impl AnimationLoader {
                             None => sprite_clip.zoom2.unwrap_or_else(|| (1.0, 1.0).into()),
                         };
                         if zoom != (1.0, 1.0).into() {
-                            width = (width as f32 * zoom.x).floor() as u32;
-                            height = (height as f32 * zoom.y).floor() as u32;
+                            width = (width as f32 * zoom.x).ceil() as u32;
+                            height = (height as f32 * zoom.y).ceil() as u32;
                         }
 
                         // Get the image rotation
@@ -217,7 +217,7 @@ impl AnimationLoader {
                     frame_part.offset.x += max_offset_x - min_offset_x + 2;
                     frame_part.offset.y += max_offset_y - min_offset_y + 2;
                     // Precompute the vertex for rendering later
-                    let new_vector = frame_part.size - Vector2::new(1, 1);
+                    let new_vector = frame_part.size;
                     let old_origin = frame.offset - (frame.size - frame.remove_offset - Vector2::new(1, 1)) / 2;
                     let new_origin = frame_part.offset - (frame_part.size - Vector2::new(1, 1)) / 2;
                     let top_left = new_origin - old_origin;
@@ -263,8 +263,9 @@ impl AnimationLoader {
 // This function convert to the "normalized" coordinates of a frame part inside
 // the frame bounding box rectangle with vertex [-1, 0], [-1, 2], [1, 0], [1, 2]
 fn convert_coordinate(coordinate: Vector2<i32>, size: Vector2<i32>) -> Vector2<f32> {
-    let x = (coordinate.x as f32 / size.x as f32 - 0.5) * 2.0;
-    let y = 2.0 - (coordinate.y as f32 / size.y as f32) * 2.0;
+    const EPSILON: f32 = 0.0001;
+    let x = (coordinate.x as f32 / size.x as f32 - 0.5) * 2.0 + EPSILON;
+    let y = 2.0 - (coordinate.y as f32 / size.y as f32) * 2.0 + EPSILON;
     Vector2::<f32>::new(x, y)
 }
 
@@ -272,6 +273,8 @@ fn convert_coordinate(coordinate: Vector2<i32>, size: Vector2<i32>) -> Vector2<f
 fn merge_frame(frames: &mut [AnimationFrame]) -> AnimationFrame {
     for frame in frames.iter_mut() {
         // Finding the half size of the image
+        // For even side and the side have length 4, the center coordinate is 1.
+        // For odd side and the side have length 3, the center coordinate is 1.
         let half_size = (frame.size - Vector2::new(1, 1)) / 2;
         frame.top_left = frame.offset - half_size;
     }
