@@ -7,10 +7,10 @@ use hashbrown::HashMap;
 use wgpu::util::StagingBelt;
 use wgpu::{
     include_wgsl, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingResource, BindingType, BufferBindingType, BufferUsages, ColorTargetState, ColorWrites, CommandEncoder, CompareFunction,
-    DepthBiasState, DepthStencilState, Device, Face, FragmentState, FrontFace, MultisampleState, PipelineCompilationOptions,
-    PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline, RenderPipelineDescriptor, ShaderModuleDescriptor,
-    ShaderStages, StencilState, TextureSampleType, TextureView, TextureViewDimension, VertexState,
+    BindingResource, BindingType, BlendState, BufferBindingType, BufferUsages, ColorTargetState, ColorWrites, CommandEncoder,
+    CompareFunction, DepthBiasState, DepthStencilState, Device, Face, FragmentState, FrontFace, MultisampleState,
+    PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipeline, RenderPipelineDescriptor,
+    ShaderModuleDescriptor, ShaderStages, StencilState, TextureSampleType, TextureView, TextureViewDimension, VertexState,
 };
 
 use crate::graphics::passes::{
@@ -34,12 +34,13 @@ pub(crate) struct InstanceData {
     texture_position: [f32; 2],
     texture_size: [f32; 2],
     color: [f32; 4],
+    extra_depth_offset: f32,
     depth_offset: f32,
     angle: f32,
     curvature: f32,
     mirror: u32,
     texture_index: i32,
-    padding: [u32; 3],
+    padding: [u32; 2],
 }
 
 pub(crate) struct ForwardEntityDrawer {
@@ -165,7 +166,7 @@ impl Drawer<{ BindGroupCount::Two }, { ColorAttachmentCount::One }, { DepthAttac
                 compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(ColorTargetState {
                     format: color_attachment_formats[0],
-                    blend: None,
+                    blend: Some(BlendState::ALPHA_BLENDING),
                     write_mask: ColorWrites::default(),
                 })],
             }),
@@ -266,6 +267,7 @@ impl Prepare for ForwardEntityDrawer {
                     texture_size: instruction.texture_size.into(),
                     color: instruction.color.components_linear(),
                     angle: instruction.angle,
+                    extra_depth_offset: instruction.extra_depth_offset,
                     depth_offset: instruction.depth_offset,
                     curvature: instruction.curvature,
                     mirror: instruction.mirror as u32,
@@ -294,6 +296,7 @@ impl Prepare for ForwardEntityDrawer {
                     texture_size: instruction.texture_size.into(),
                     color: instruction.color.components_linear(),
                     angle: instruction.angle,
+                    extra_depth_offset: instruction.extra_depth_offset,
                     depth_offset: instruction.depth_offset,
                     curvature: instruction.curvature,
                     mirror: instruction.mirror as u32,

@@ -15,7 +15,7 @@ use ragnarok_packets::ClientTick;
 
 use super::error::LoadError;
 use super::Sprite;
-use crate::graphics::{Color, Texture};
+use crate::graphics::Color;
 use crate::interface::application::InterfaceSettings;
 use crate::interface::layout::{ScreenClip, ScreenPosition, ScreenSize};
 use crate::loaders::{GameFileLoader, FALLBACK_ACTIONS_FILE};

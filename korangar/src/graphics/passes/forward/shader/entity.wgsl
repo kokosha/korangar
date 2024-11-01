@@ -36,6 +36,7 @@ struct InstanceData {
     texture_position: vec2<f32>,
     texture_size: vec2<f32>,
     color: vec4<f32>,
+    extra_depth_offset: f32,
     depth_offset: f32,
     angle: f32,
     curvature: f32,
@@ -134,7 +135,7 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     // Get the number of lights affecting this tile
     let light_count = textureLoad(light_count_texture, vec2<u32>(tile_x, tile_y), 0).r;
 
-    if (diffuse_color.a != 1.0) {
+    if (diffuse_color.a < 0.6) {
         discard;
     }
 
@@ -314,7 +315,7 @@ fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
     let u = f32(1 - case0);
     let v = f32(1 - case1);
 
-    let depth = y / 2.0;
+    let depth = y / 2.0 + instance.extra_depth_offset;
     let curve = x;
     return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
 }
