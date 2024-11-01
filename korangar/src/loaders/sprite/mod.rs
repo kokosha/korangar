@@ -66,12 +66,21 @@ impl SpriteLoader {
             .rgba_image_data
             .iter()
             .map(|image_data| {
+                // Revert the rows, the image is flipped upside down
                 // Convert the pixel from ABGR format to RGBA format
-                let data: Vec<_> = image_data
-                    .data
-                    .chunks_exact(4)
-                    .flat_map(|pixel| [pixel[3], pixel[2], pixel[1], pixel[0]])
+                let width = image_data.width;
+                let mut data: Vec<u8> = image_data.data.clone();
+                data = data
+                    .chunks_exact(4 * width as usize)
+                    .rev()
+                    .flat_map(|pixels| {
+                        pixels
+                            .chunks_exact(4)
+                            .flat_map(|pixel| [pixel[3], pixel[2], pixel[1], pixel[0]])
+                            .collect::<Vec<u8>>()
+                    })
                     .collect();
+
                 RgbaImageData {
                     width: image_data.width,
                     height: image_data.height,
