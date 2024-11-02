@@ -18,6 +18,7 @@ use crate::loaders::GameFileLoader;
 
 #[derive(Clone, Debug, PrototypeElement)]
 pub struct Sprite {
+    pub palette_size: usize,
     #[hidden_element]
     pub textures: Vec<Arc<Texture>>,
     #[cfg(feature = "debug")]
@@ -114,6 +115,8 @@ impl SpriteLoader {
                 data,
             }
         });
+        let palette_size = palette_images.len();
+
         let textures = palette_images
             .chain(rgba_images)
             .map(|image_data| {
@@ -141,6 +144,7 @@ impl SpriteLoader {
             .collect();
 
         let sprite = Arc::new(Sprite {
+            palette_size,
             textures,
             #[cfg(feature = "debug")]
             sprite_data: cloned_sprite_data,

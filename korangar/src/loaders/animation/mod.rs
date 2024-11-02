@@ -60,11 +60,23 @@ impl AnimationLoader {
                         if sprite_clip.sprite_number == -1 {
                             continue;
                         }
-                        let sprite_number = sprite_clip.sprite_number as usize;
+                        // Find the correct sprite number
+                        let mut sprite_number = sprite_clip.sprite_number as usize;
+                        // The type of sprite 0 for pallete, 1 for bgra
+                        let sprite_type = match sprite_clip.sprite_type {
+                            Some(value) => value as usize,
+                            None => 0,
+                        };
+                        if sprite_type == 1 {
+                            sprite_number += animation_pair.sprites.palette_size;
+                        }
+
+                        // Find the size of image
                         let texture_size = animation_pair.sprites.textures[sprite_number].get_size();
                         let mut height = texture_size.height;
                         let mut width = texture_size.width;
-                        // Apply color filter in the image
+
+                        // Get the value to apply color filter in the image
                         let color = match sprite_clip.color {
                             Some(color) => {
                                 let alpha = (((color >> 24) & 0xFF) as u8) as f32 / 255.0;
@@ -93,7 +105,7 @@ impl AnimationLoader {
                             height = (height as f32 * zoom.y).ceil() as u32;
                         }
 
-                        // Get the image rotation
+                        // Get the image rotation angle
                         let angle = match sprite_clip.angle {
                             Some(value) => value as f32 / 360.0 * 2.0 * std::f32::consts::PI,
                             None => 0.0,
@@ -106,6 +118,7 @@ impl AnimationLoader {
                         // This is hardcoded for head in player for attach_point
                         // animation_index == 0 is head
                         // animation_index == 1 is body
+                        // Attach point have a different offset calculation.
                         let has_attach_point = match motion.attach_point_count {
                             Some(value) => value == 1,
                             None => false,
