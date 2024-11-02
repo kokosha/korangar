@@ -27,7 +27,7 @@ const INITIAL_INSTRUCTION_SIZE: usize = 256;
 #[repr(C)]
 pub(crate) struct InstanceData {
     world: [[f32; 4]; 4],
-    affine: [[f32; 4]; 4],
+    frame_part_transform: [[f32; 4]; 4],
     texture_position: [f32; 2],
     texture_size: [f32; 2],
     color: [f32; 4],
@@ -256,7 +256,7 @@ impl Prepare for ForwardEntityDrawer {
 
                 self.instance_data.push(InstanceData {
                     world: instruction.world.into(),
-                    affine: instruction.affine.into(),
+                    frame_part_transform: instruction.frame_part_transform.into(),
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     color: instruction.color.components_linear(),
@@ -282,7 +282,7 @@ impl Prepare for ForwardEntityDrawer {
             for instruction in instructions.entities.iter() {
                 self.instance_data.push(InstanceData {
                     world: instruction.world.into(),
-                    affine: instruction.affine.into(),
+                    frame_part_transform: instruction.frame_part_transform.into(),
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     color: instruction.color.components_linear(),

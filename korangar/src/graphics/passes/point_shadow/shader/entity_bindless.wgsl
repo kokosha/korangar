@@ -6,7 +6,7 @@ struct PassUniforms {
 
 struct InstanceData {
     world: mat4x4<f32>,
-    affine: mat4x4<f32>,
+    frame_part_transform: mat4x4<f32>,
     texture_position: vec2<f32>,
     texture_size: vec2<f32>,
     extra_depth_offset: f32,
@@ -53,10 +53,10 @@ fn vs_main(
 ) -> VertexOutput {
     let instance = instance_data[instance_index];
     let vertex = vertex_data(vertex_index);
-    let new_vertex = instance.affine * vec4<f32>(vertex.position, 1.0);
+    let frame_part_vertex = instance.frame_part_transform * vec4<f32>(vertex.position, 1.0);
 
     var output: VertexOutput;
-    output.world_position = instance.world * new_vertex;
+    output.world_position = instance.world * frame_part_vertex;
     output.position = pass_uniforms.view_projection * output.world_position;
     output.texture_coordinates = instance.texture_position + vertex.texture_coordinates * instance.texture_size;
 
@@ -64,8 +64,9 @@ fn vs_main(
         output.texture_coordinates.x = 1.0 - output.texture_coordinates.x;
     }
 
-    output.depth_offset = new_vertex.y/2.0 + instance.extra_depth_offset;
-    output.curvature = new_vertex.x;
+    // The depth multiplier and curvature multiplier is derived from the truth table of vertex_data
+    output.depth_offset = frame_part_vertex.y/2.0 + instance.extra_depth_offset;
+    output.curvature = frame_part_vertex.x;
     output.original_depth_offset = instance.depth_offset;
     output.original_curvature = instance.curvature;
     output.texture_index = instance.texture_index;
@@ -127,8 +128,8 @@ fn vertex_data(vertex_index: u32) -> Vertex {
     let z = 1.0;
     let u = f32(1 - case0);
     let v = f32(1 - case1);
-    let depth = f32(case1);
-    let curve = u * 2.0 - 1.0;
+    let depth = y / 2.0;
+    let curve = x;
 
     return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v), depth, curve);
 }

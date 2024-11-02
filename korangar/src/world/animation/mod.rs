@@ -129,7 +129,7 @@ impl AnimationData {
 
             instructions.push(EntityInstruction {
                 world: world_matrix,
-                affine: affine_matrix,
+                frame_part_transform: affine_matrix,
                 texture_position,
                 texture_size,
                 depth_offset,

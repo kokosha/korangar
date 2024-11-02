@@ -16,7 +16,7 @@ struct GlobalUniforms {
 
 struct InstanceData {
     world: mat4x4<f32>,
-    affine: mat4x4<f32>,
+    frame_part_transform: mat4x4<f32>,
     texture_position: vec2<f32>,
     texture_size: vec2<f32>,
     texture_index: i32,
@@ -60,12 +60,10 @@ fn vs_main(
 ) -> VertexOutput {
     let instance = instance_data[instance_index];
     let vertex = vertex_data(vertex_index);
-    let new_vertex = instance.affine * vec4<f32>(vertex.position, 1.0);
-    let world_position = instance.world * vec4<f32>(new_vertex);
-
+    let frame_part_vertex = instance.frame_part_transform * vec4<f32>(vertex.position, 1.0);
 
     var output: VertexOutput;
-    output.position = global_uniforms.view_projection * instance.world * new_vertex;
+    output.position = global_uniforms.view_projection * instance.world * frame_part_vertex;
     output.texture_coordinates = instance.texture_position + vertex.texture_coordinates * instance.texture_size;
 
     if (instance.mirror != 0u) {
