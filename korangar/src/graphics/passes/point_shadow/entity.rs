@@ -23,10 +23,7 @@ const INITIAL_INSTRUCTION_SIZE: usize = 256;
 #[repr(C)]
 struct InstanceData {
     world: [[f32; 4]; 4],
-    texture_top_left: [f32; 2],
-    texture_bottom_left: [f32; 2],
-    texture_top_right: [f32; 2],
-    texture_bottom_right: [f32; 2],
+    affine: [[f32; 4]; 4],
     texture_position: [f32; 2],
     texture_size: [f32; 2],
     extra_depth_offset: f32,
@@ -259,10 +256,7 @@ impl Prepare for PointShadowEntityDrawer {
 
                 self.instance_data.push(InstanceData {
                     world: instruction.world.into(),
-                    texture_top_left: instruction.texture_top_left.into(),
-                    texture_bottom_left: instruction.texture_bottom_left.into(),
-                    texture_top_right: instruction.texture_top_right.into(),
-                    texture_bottom_right: instruction.texture_bottom_right.into(),
+                    affine: instruction.affine.into(),
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     extra_depth_offset: instruction.extra_depth_offset,
@@ -287,10 +281,7 @@ impl Prepare for PointShadowEntityDrawer {
             for instruction in instructions.point_shadow_entities.iter() {
                 self.instance_data.push(InstanceData {
                     world: instruction.world.into(),
-                    texture_top_left: instruction.texture_top_left.into(),
-                    texture_bottom_left: instruction.texture_bottom_left.into(),
-                    texture_top_right: instruction.texture_top_right.into(),
-                    texture_bottom_right: instruction.texture_bottom_right.into(),
+                    affine: instruction.affine.into(),
                     texture_position: instruction.texture_position.into(),
                     texture_size: instruction.texture_size.into(),
                     extra_depth_offset: instruction.extra_depth_offset,

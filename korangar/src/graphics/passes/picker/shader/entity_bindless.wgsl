@@ -16,10 +16,7 @@ struct GlobalUniforms {
 
 struct InstanceData {
     world: mat4x4<f32>,
-    texture_top_left: vec2<f32>,
-    texture_bottom_left: vec2<f32>,
-    texture_top_right: vec2<f32>,
-    texture_bottom_right: vec2<f32>,
+    affine: mat4x4<f32>,
     texture_position: vec2<f32>,
     texture_size: vec2<f32>,
     texture_index: i32,
@@ -63,10 +60,12 @@ fn vs_main(
     @builtin(instance_index) instance_index: u32,
 ) -> VertexOutput {
     let instance = instance_data[instance_index];
-    let vertex = vertex_data_new(vertex_index, instance_index);
+    let vertex = vertex_data(vertex_index);
+    let new_vertex = instance.affine * vec4<f32>(vertex.position, 1.0);
+    let world_position = instance.world * vec4<f32>(new_vertex);
 
     var output: VertexOutput;
-    output.position = global_uniforms.view_projection * instance.world * vec4<f32>(vertex.position, 1.0);
+    output.position = global_uniforms.view_projection * instance.world * new_vertex;
     output.texture_coordinates = instance.texture_position + vertex.texture_coordinates * instance.texture_size;
     output.texture_index = instance.texture_index;
 
@@ -105,10 +104,6 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
     return output;
 }
 
-// TODO: The function vertex_data is currently unutilized in the shader.
-// I will leave the function here because vertex generation truth table is really optimized.
-// Later I will check if it is possible to set the frame part directly using matrix transformation,
-// instead of generating the vertex in the vertex fragment.
 // Optimized version of the following truth table:
 //
 // vertex_index  x  y  z  u  v
@@ -136,64 +131,6 @@ fn vertex_data(vertex_index: u32) -> Vertex {
     return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
 }
 
-// Truth table of the bounding-box frame:
-//
-// vertex_index  x  y  z  u  v 
-// 0            -1  2  0  0  0
-// 1            -1  0  0  0  1
-// 2             1  2  0  1  0
-// 3             1  2  0  1  0
-// 4            -1  0  0  0  1
-// 5             1  0  0  1  1
-//
-// (x,y,z) are the vertex position
-// (u,v) are the UV coordinates
-//
-// The following terms will be abreviated
-// texture_top_left (tl)
-// texture_bottom_left (bl)
-// texture_top_right (tr)
-// texture_bottom_right (br) 
-// Truth table of the frame part:
-//
-// vertex_index  x     y     z  u  v
-// 0             tl.x  tl.y  0  0  0
-// 1             bl.x  bl.y  0  0  1 
-// 2             tr.x  tr.y  0  1  0
-// 3             tr.x  tr.y  0  1  0
-// 4             bl.x  bl.y  0  0  1
-// 5             br.x  br.y  0  1  1
-//
-// (x,y,z) are the vertex position
-// (u,v) are the UV coordinates
-fn vertex_data_new(vertex_index: u32, instance_index: u32) -> Vertex {
-    let instance = instance_data[instance_index];
-    let index = 1u << vertex_index;
-
-    let case0 = i32((index & 0x13u) != 0u);
-    let case1 = i32((index & 0x0Du) != 0u);
-
-    // Check between texture_top_left and texture_bottom_left
-    let check1 = vertex_index == 0;
-    let x1 = select(instance.texture_bottom_left.x, instance.texture_top_left.x, check1);
-    let y1 = select(instance.texture_bottom_left.y, instance.texture_top_left.y, check1);
-
-    // Check between texture_top_right and texture_bottom_right
-    let check2 = vertex_index == 5;
-    let x2 = select(instance.texture_top_right.x, instance.texture_bottom_right.x, check2);
-    let y2 = select(instance.texture_top_right.y, instance.texture_bottom_right.y, check2);
-
-    // Check between these two options
-    let result = check2 || (vertex_index & 2) != 0; 
-    let x = select(x1, x2, result);
-    let y = select(y1, y2, result);
-    let z = 0.0;
-
-    let u = f32(1 - case0);
-    let v = f32(1 - case1);
-
-    return Vertex(vec3<f32>(x, y, z), vec2<f32>(u, v));
-}
 fn linearToNonLinear(linear_depth: f32) -> f32 {
     return NEAR_PLANE / (linear_depth + EPSILON);
 }

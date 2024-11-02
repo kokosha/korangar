@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cgmath::{Array, Point3, Vector2, Zero};
+use cgmath::{Array, Matrix4, Point3, Vector2, Zero};
 use korangar_interface::elements::PrototypeElement;
 use ragnarok_packets::EntityId;
 
@@ -48,10 +48,7 @@ pub struct AnimationFramePart {
     pub mirror: bool,
     pub angle: f32,
     pub color: Color,
-    pub texture_top_left: Vector2<f32>,
-    pub texture_bottom_left: Vector2<f32>,
-    pub texture_top_right: Vector2<f32>,
-    pub texture_bottom_right: Vector2<f32>,
+    pub affine_matrix: Matrix4<f32>,
 }
 
 impl Default for AnimationFramePart {
@@ -64,10 +61,7 @@ impl Default for AnimationFramePart {
             mirror: Default::default(),
             angle: Default::default(),
             color: Default::default(),
-            texture_top_left: Vector2::<f32>::zero(),
-            texture_bottom_left: Vector2::<f32>::zero(),
-            texture_top_right: Vector2::<f32>::zero(),
-            texture_bottom_right: Vector2::<f32>::zero(),
+            affine_matrix: Matrix4::<f32>::zero(),
         }
     }
 }
@@ -128,16 +122,14 @@ impl AnimationData {
             let size = Vector2::new(frame.size.x as f32 * scale.x / 10.0, frame.size.y as f32 * scale.y / 10.0);
 
             let world_matrix = camera.billboard_matrix(entity_position, origin, size);
+            let affine_matrix = frame_part.affine_matrix;
             let texture_size = Vector2::new(1.0 / cell_count.x as f32, 1.0 / cell_count.y as f32);
             let texture_position = Vector2::new(texture_size.x * cell_position.x as f32, texture_size.y * cell_position.y as f32);
             let (depth_offset, curvature) = camera.calculate_depth_offset_and_curvature(&world_matrix, scale.x, scale.y);
 
             instructions.push(EntityInstruction {
                 world: world_matrix,
-                texture_top_left: frame_part.texture_top_left,
-                texture_bottom_left: frame_part.texture_bottom_left,
-                texture_top_right: frame_part.texture_top_right,
-                texture_bottom_right: frame_part.texture_bottom_right,
+                affine: affine_matrix,
                 texture_position,
                 texture_size,
                 depth_offset,

@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 use std::sync::Arc;
 
-use cgmath::Vector2;
+use cgmath::{Matrix4, Vector2};
 use derive_new::new;
 use hashbrown::HashMap;
 use num::Zero;
@@ -222,13 +222,28 @@ impl AnimationLoader {
                     let new_origin = frame_part.offset - (frame_part.size - Vector2::new(1, 1)) / 2;
                     let top_left = new_origin - old_origin;
                     let bottom_left = top_left + new_vector.y * Vector2::<i32>::unit_y();
-                    let top_right = top_left + new_vector.x * Vector2::<i32>::unit_x();
                     let bottom_right = top_left + new_vector;
 
-                    frame_part.texture_top_left = convert_coordinate(top_left, frame.size);
-                    frame_part.texture_bottom_left = convert_coordinate(bottom_left, frame.size);
-                    frame_part.texture_top_right = convert_coordinate(top_right, frame.size);
-                    frame_part.texture_bottom_right = convert_coordinate(bottom_right, frame.size);
+                    let texture_top_left = convert_coordinate(top_left, frame.size);
+                    let texture_bottom_left = convert_coordinate(bottom_left, frame.size);
+                    let texture_bottom_right = convert_coordinate(bottom_right, frame.size);
+
+                    // Scale the vertex (2.-1), (0, -1), (2, 1), (0, 1) to fit texture coordinates
+                    // as above.
+                    let scale_matrix = Matrix4::from_nonuniform_scale(
+                        (texture_bottom_right.x - texture_bottom_left.x) / 2.0,
+                        (texture_top_left.y - texture_bottom_left.y) / 2.0,
+                        1.0,
+                    );
+
+                    // Center from the vertices of truth table
+                    let new_center = Vector2::new(0.0, (texture_top_left.y - texture_bottom_left.y) / 2.0);
+                    // Center from the texture center
+                    let texture_center = (texture_top_left + texture_bottom_right) / 2.0;
+                    // Find the amount of translation needed
+                    let translation_matrix = Matrix4::from_translation(texture_center.extend(1.0) - new_center.extend(1.0));
+
+                    frame_part.affine_matrix = translation_matrix * scale_matrix;
                 }
             });
             animations.push(Animation { frames });

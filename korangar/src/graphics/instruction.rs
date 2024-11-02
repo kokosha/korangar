@@ -175,12 +175,9 @@ pub struct ModelInstruction {
 #[derive(Clone, Debug)]
 pub struct EntityInstruction {
     pub world: Matrix4<f32>,
+    pub affine: Matrix4<f32>,
     pub texture_position: Vector2<f32>,
     pub texture_size: Vector2<f32>,
-    pub texture_top_left: Vector2<f32>,
-    pub texture_bottom_left: Vector2<f32>,
-    pub texture_top_right: Vector2<f32>,
-    pub texture_bottom_right: Vector2<f32>,
     pub extra_depth_offset: f32,
     pub depth_offset: f32,
     pub curvature: f32,
