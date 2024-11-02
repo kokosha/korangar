@@ -64,8 +64,12 @@ fn vs_main(
     }
 
     // The depth multiplier and curvature multiplier is derived from the truth table of vertex_data
+    // Because we have to transform the vertex of the frame part, we can't use the depth and curvature
+    // directly and are using the fact, that y/depth and x/curvature correlate to each other.
+    // An offset is also added for frame parts not stay at the same depth.
     output.depth_offset = frame_part_vertex.y/2.0 + instance.extra_depth_offset;
     output.curvature = frame_part_vertex.x;
+    
     output.original_depth_offset = instance.depth_offset;
     output.original_curvature = instance.curvature;
     output.angle = instance.angle;
