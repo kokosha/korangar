@@ -25,7 +25,7 @@ pub struct TextureLoader {
 }
 
 impl TextureLoader {
-    fn create(&self, name: &str, image: RgbaImage) -> Arc<Texture> {
+    pub fn create(&self, name: &str, image: RgbaImage) -> Arc<Texture> {
         let texture = Texture::new_with_data(
             &self.device,
             &self.queue,

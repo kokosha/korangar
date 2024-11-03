@@ -18,7 +18,7 @@ use crate::interface::application::InterfaceSettings;
 use crate::interface::layout::{ScreenPosition, ScreenSize};
 use crate::interface::theme::GameTheme;
 use crate::interface::windows::WindowCache;
-use crate::loaders::{ActionLoader, AnimationLoader, AnimationState, ScriptLoader, SpriteLoader};
+use crate::loaders::{ActionLoader, AnimationLoader, AnimationState, ScriptLoader, SpriteLoader, TextureLoader};
 use crate::renderer::GameInterfaceRenderer;
 #[cfg(feature = "debug")]
 use crate::renderer::MarkerRenderer;
@@ -265,6 +265,7 @@ fn get_entity_part_files(script_loader: &ScriptLoader, entity_type: EntityType, 
 
 impl Common {
     pub fn new(
+        texture_loader: &TextureLoader,
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         animation_loader: &mut AnimationLoader,
@@ -299,7 +300,7 @@ impl Common {
 
         let entity_part_files = get_entity_part_files(script_loader, entity_type, job_id, sex);
         let animation_data = animation_loader
-            .get(sprite_loader, action_loader, entity_type, &entity_part_files)
+            .get(texture_loader, sprite_loader, action_loader, entity_type, &entity_part_files)
             .unwrap();
         let details = ResourceState::Unavailable;
         let animation_state = AnimationState::new(client_tick);
@@ -332,6 +333,7 @@ impl Common {
 
     pub fn reload_sprite(
         &mut self,
+        texture_loader: &TextureLoader,
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         script_loader: &ScriptLoader,
@@ -339,7 +341,13 @@ impl Common {
     ) {
         let entity_part_files = get_entity_part_files(script_loader, self.entity_type, self.job_id, self.sex);
         self.animation_data = animation_loader
-            .get(sprite_loader, action_loader, self.entity_type, &entity_part_files)
+            .get(
+                texture_loader,
+                sprite_loader,
+                action_loader,
+                self.entity_type,
+                &entity_part_files,
+            )
             .unwrap();
     }
 
@@ -775,6 +783,7 @@ pub struct Player {
 
 impl Player {
     pub fn new(
+        texture_loader: &TextureLoader,
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         animation_loader: &mut AnimationLoader,
@@ -790,6 +799,7 @@ impl Player {
         let maximum_spell_points = character_information.maximum_spell_points as usize;
         let maximum_activity_points = 0;
         let common = Common::new(
+            texture_loader,
             sprite_loader,
             action_loader,
             animation_loader,
@@ -901,6 +911,7 @@ pub struct Npc {
 
 impl Npc {
     pub fn new(
+        texture_loader: &TextureLoader,
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         animation_loader: &mut AnimationLoader,
@@ -910,6 +921,7 @@ impl Npc {
         client_tick: ClientTick,
     ) -> Self {
         let common = Common::new(
+            texture_loader,
             sprite_loader,
             action_loader,
             animation_loader,
@@ -1010,13 +1022,14 @@ impl Entity {
 
     pub fn reload_sprite(
         &mut self,
+        texture_loader: &TextureLoader,
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         animation_loader: &mut AnimationLoader,
         script_loader: &ScriptLoader,
     ) {
         self.get_common_mut()
-            .reload_sprite(sprite_loader, action_loader, script_loader, animation_loader);
+            .reload_sprite(texture_loader, sprite_loader, action_loader, script_loader, animation_loader);
     }
 
     pub fn set_details_requested(&mut self) {

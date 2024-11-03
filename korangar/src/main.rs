@@ -902,6 +902,7 @@ impl Client {
                     self.saved_player_name = character_information.name.clone();
 
                     let player = Player::new(
+                        &self.texture_loader,
                         &mut self.sprite_loader,
                         &mut self.action_loader,
                         &mut self.animation_loader,
@@ -969,6 +970,7 @@ impl Client {
                         .retain(|entity| entity.get_entity_id() != entity_appeared_data.entity_id);
 
                     let npc = Npc::new(
+                        &self.texture_loader,
                         &mut self.sprite_loader,
                         &mut self.action_loader,
                         &mut self.animation_loader,
@@ -1157,6 +1159,7 @@ impl Client {
 
                     entity.set_job(job_id as usize);
                     entity.reload_sprite(
+                        &self.texture_loader,
                         &mut self.sprite_loader,
                         &mut self.action_loader,
                         &mut self.animation_loader,

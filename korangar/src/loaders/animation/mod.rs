@@ -4,11 +4,12 @@ use std::sync::Arc;
 use cgmath::{Matrix4, Vector2};
 use derive_new::new;
 use hashbrown::HashMap;
+use korangar_util::texture_atlas::{AllocationId, AtlasAllocation, TextureAtlas};
 use num::Zero;
 
 use super::error::LoadError;
-use crate::loaders::{ActionLoader, SpriteLoader};
-use crate::world::{Animation, AnimationData, AnimationFrame, AnimationFramePart, AnimationPair};
+use crate::loaders::{ActionLoader, Actions, SpriteLoader, TextureLoader};
+use crate::world::{Animation, AnimationData, AnimationFrame, AnimationFramePart, AnimationPair, TextureSubAllocation};
 use crate::{Color, EntityType};
 
 // TODO: NHA Create and use an easier to use cache.
@@ -21,36 +22,60 @@ pub struct AnimationLoader {
 impl AnimationLoader {
     pub fn load(
         &mut self,
+        texture_loader: &TextureLoader,
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         entity_type: EntityType,
         entity_part_files: &[String],
     ) -> Result<Arc<AnimationData>, LoadError> {
-        // Create animation pair with sprite and action
-        let animation_pairs: Vec<AnimationPair> = entity_part_files
+        // TODO: NHA I don't like the following code. We do "map/drain/collect" too
+        //       often. We should refactor the code to be more readable. This is just a
+        //       PoC.
+        let mut animation_actions: Vec<Arc<Actions>> = entity_part_files
             .iter()
-            .map(|file_path| AnimationPair {
-                sprites_atlas: sprite_loader.get_atlas(&format!("{file_path}.spr")).unwrap(),
-                sprites: sprite_loader.get(&format!("{file_path}.spr")).unwrap(),
-                actions: action_loader.get(&format!("{file_path}.act")).unwrap(),
+            .map(|file_path| action_loader.get(&format!("{file_path}.act")).unwrap())
+            .collect();
+
+        let mut texture_atlas = TextureAtlas::new(true);
+
+        let mut animation_sprite_allocations: Vec<(usize, Vec<AllocationId>)> = entity_part_files
+            .iter()
+            .map(|file_path| {
+                let (palette_size, mut images) = sprite_loader.load_sprite_data(&format!("{file_path}.spr")).unwrap();
+                let allocations: Vec<AllocationId> = images.drain(..).map(|image| texture_atlas.register_image(image)).collect();
+                (palette_size, allocations)
             })
             .collect();
 
-        // The sprite is stored as rgba in animation_pair.sprites.rgba_images or
-        // animation_pair.sprites.palette_images
-        // The sprite is stored as texture in animation_pair.sprites.textures
+        texture_atlas.build_atlas();
+
+        let mut animation_sprite_mappings: Vec<(usize, Vec<AtlasAllocation>)> = animation_sprite_allocations
+            .drain(..)
+            .map(|(palette_size, mut allocation_ids)| {
+                let allocations = allocation_ids
+                    .drain(..)
+                    .map(|allocation_id| texture_atlas.get_allocation(allocation_id).unwrap())
+                    .collect();
+                (palette_size, allocations)
+            })
+            .collect();
+
+        let image = texture_atlas.get_atlas();
+        let texture = texture_loader.create(&entity_part_files.join(" ").to_string(), image);
 
         // For each animation, we collect all the frame part need to generate the frame
         let mut animations_list: Vec<Vec<Vec<AnimationFrame>>> = Vec::new();
 
         // Each animation pair has the sprites and actions, we iterate over the
-        // animation pairs.
+        // animation actions.
         // Each entity has several actions and the actions is composed of several
         // motion, in each motion contains several pictures that we try to
         // merge.
-        for (animation_index, animation_pair) in animation_pairs.iter().enumerate() {
+        for (animation_index, (action, (palette_size, animation_sprite_mapping))) in
+            animation_actions.iter().zip(animation_sprite_mappings.iter()).enumerate()
+        {
             let mut animation_frames: Vec<Vec<AnimationFrame>> = Vec::new();
-            for (action_index, action) in animation_pair.actions.actions.iter().enumerate() {
+            for (action_index, action) in action.actions.iter().enumerate() {
                 let mut action_frames: Vec<AnimationFrame> = Vec::new();
                 for (motion_index, motion) in action.motions.iter().enumerate() {
                     let mut motion_frames: Vec<AnimationFrame> = Vec::new();
@@ -63,19 +88,18 @@ impl AnimationLoader {
                         }
                         // Find the correct sprite number
                         let mut sprite_number = sprite_clip.sprite_number as usize;
-                        // The type of sprite 0 for pallete, 1 for bgra
+                        // The type of sprite 0 for pallet, 1 for BGRA
                         let sprite_type = match sprite_clip.sprite_type {
                             Some(value) => value as usize,
                             None => 0,
                         };
                         if sprite_type == 1 {
-                            sprite_number += animation_pair.sprites.palette_size;
+                            sprite_number += palette_size;
                         }
 
                         // Find the size of image
-                        let texture_size = animation_pair.sprites.textures[sprite_number].get_size();
-                        let mut height = texture_size.height;
-                        let mut width = texture_size.width;
+                        let mut width = animation_sprite_mapping[sprite_number].rectangle.width();
+                        let mut height = animation_sprite_mapping[sprite_number].rectangle.height();
 
                         // Get the value to apply color filter in the image
                         let color = match sprite_clip.color {
@@ -125,8 +149,7 @@ impl AnimationLoader {
                             None => false,
                         };
                         if entity_type == EntityType::Player && has_attach_point && animation_index == 1 {
-                            let parent_animation_pair = &animation_pairs[0];
-                            let parent_action = &parent_animation_pair.actions.actions[action_index];
+                            let parent_action = &animation_actions[0].actions[action_index];
                             let parent_motion = &parent_action.motions[motion_index];
                             let parent_attach_point = parent_motion.attach_points[0].position;
                             let attach_point = motion.attach_points[0].position;
@@ -165,8 +188,9 @@ impl AnimationLoader {
             }
             animations_list.push(animation_frames);
         }
-        let action_size = animation_pairs[0].actions.actions.len();
-        let animation_pair_size = animation_pairs.len();
+
+        let action_size = animation_actions[0].actions.len();
+        let animation_pair_size = animation_actions.len();
 
         let mut animations: Vec<Animation> = Vec::new();
 
@@ -174,7 +198,7 @@ impl AnimationLoader {
         // For each motion get the animation pair for merging.
         // Merge the animation pair and get the frame for each action.
         for action_index in 0..action_size {
-            let motion_size = animation_pairs[0].actions.actions[action_index].motions.len();
+            let motion_size = animation_actions[0].actions[action_index].motions.len();
             let mut frames: Vec<AnimationFrame> = Vec::new();
             for motion_index in 0..motion_size {
                 let mut generate: Vec<AnimationFrame> = Vec::new();
@@ -263,11 +287,36 @@ impl AnimationLoader {
             animations.push(Animation { frames });
         }
 
+        let delays = animation_actions[0].delays.clone();
+
+        let animation_pairs: Vec<AnimationPair> = animation_actions
+            .drain(..)
+            .zip(animation_sprite_mappings.drain(..))
+            .map(|(actions, (_, mut mappings))| {
+                let texture_sub_allocations = mappings
+                    .drain(..)
+                    .map(|mapping| {
+                        let top_left = mapping.map_to_atlas(Vector2::new(0.0, 0.0));
+                        let bottom_right = mapping.map_to_atlas(Vector2::new(1.0, 1.0));
+                        let size = bottom_right - top_left;
+                        let position = top_left;
+                        TextureSubAllocation { position, size }
+                    })
+                    .collect();
+
+                AnimationPair {
+                    actions,
+                    texture_sub_allocations,
+                }
+            })
+            .collect();
+
         let animation_data = Arc::new(AnimationData {
-            delays: animation_pairs[0].actions.delays.clone(),
-            animation_pair: animation_pairs,
             animations,
+            animation_pairs,
+            delays,
             entity_type,
+            texture,
         });
 
         self.cache.insert(entity_part_files.to_vec(), animation_data.clone());
@@ -277,6 +326,7 @@ impl AnimationLoader {
 
     pub fn get(
         &mut self,
+        texture_loader: &TextureLoader,
         sprite_loader: &mut SpriteLoader,
         action_loader: &mut ActionLoader,
         entity_type: EntityType,
@@ -284,7 +334,7 @@ impl AnimationLoader {
     ) -> Result<Arc<AnimationData>, LoadError> {
         match self.cache.get(entity_part_files) {
             Some(animation_data) => Ok(animation_data.clone()),
-            None => self.load(sprite_loader, action_loader, entity_type, entity_part_files),
+            None => self.load(texture_loader, sprite_loader, action_loader, entity_type, entity_part_files),
         }
     }
 }
