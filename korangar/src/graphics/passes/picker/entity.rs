@@ -259,8 +259,6 @@ impl Prepare for PickerEntityDrawer {
                     identifier_low,
                     padding: Default::default(),
                 });
-
-                texture_views.push(instruction.texture.get_texture_view());
             }
 
             self.instance_data_buffer.reserve(device, self.instance_data.len());

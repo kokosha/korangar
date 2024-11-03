@@ -21,7 +21,7 @@ use crate::graphics::{Buffer, Capabilities, EntityInstruction, GlobalContext, Pr
 const SHADER: ShaderModuleDescriptor = include_wgsl!("shader/entity.wgsl");
 const SHADER_BINDLESS: ShaderModuleDescriptor = include_wgsl!("shader/entity_bindless.wgsl");
 const DRAWER_NAME: &str = "forward entity";
-const INITIAL_INSTRUCTION_SIZE: usize = 256;
+const INITIAL_INSTRUCTION_SIZE: usize = 25600;
 
 #[derive(Copy, Clone, Pod, Zeroable)]
 #[repr(C)]
@@ -268,8 +268,6 @@ impl Prepare for ForwardEntityDrawer {
                     texture_index,
                     padding: Default::default(),
                 });
-
-                texture_views.push(instruction.texture.get_texture_view());
             }
 
             if texture_views.is_empty() {

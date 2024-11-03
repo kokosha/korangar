@@ -264,8 +264,6 @@ impl Prepare for DirectionalShadowEntityDrawer {
                     texture_index,
                     padding: Default::default(),
                 });
-
-                texture_views.push(instruction.texture.get_texture_view());
             }
 
             if texture_views.is_empty() {
