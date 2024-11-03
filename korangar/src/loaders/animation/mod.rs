@@ -30,6 +30,7 @@ impl AnimationLoader {
         let animation_pairs: Vec<AnimationPair> = entity_part_files
             .iter()
             .map(|file_path| AnimationPair {
+                sprites_atlas: sprite_loader.get_atlas(&format!("{file_path}.spr")).unwrap(),
                 sprites: sprite_loader.get(&format!("{file_path}.spr")).unwrap(),
                 actions: action_loader.get(&format!("{file_path}.act")).unwrap(),
             })

@@ -38,6 +38,8 @@ struct VertexOutput {
     @location(2) identifier_high: u32,
     @location(3) identifier_low: u32,
     @location(4) angle: f32,
+    @location(5) texture_position: vec2<f32>,
+    @location(6) texture_size: vec2<f32>,
 }
 
 struct FragmentOutput {
@@ -68,8 +70,11 @@ fn vs_main(
     output.texture_coordinates = instance.texture_position + vertex.texture_coordinates * instance.texture_size;
     output.texture_index = instance.texture_index;
 
+    output.texture_position = instance.texture_position;
+    output.texture_size = instance.texture_size;
+
     if (instance.mirror != 0u) {
-        output.texture_coordinates.x = 1.0 - output.texture_coordinates.x;
+        output.texture_coordinates = instance.texture_position + vec2<f32>(1.0 - vertex.texture_coordinates.x, vertex.texture_coordinates.y) * instance.texture_size;
     }
 
     output.identifier_high = instance.identifier_high;
@@ -81,11 +86,15 @@ fn vs_main(
 @fragment
 fn fs_main(input: VertexOutput) -> FragmentOutput {
     // Apply the rotation from action
+    let center = input.texture_position + input.texture_size/2.0;
+    let top_left = input.texture_position;
+    let bottom_right = input.texture_position + input.texture_size;
     let sin_factor = sin(input.angle);
     let cos_factor = cos(input.angle);
-    let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
-    let new_input = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
-    let diffuse_color = textureSample(textures[input.texture_index], nearest_sampler, new_input);
+    let rotate = vec2(input.texture_coordinates.x - center.x, input.texture_coordinates.y - center.y) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
+    let texture_coordinates = vec2(clamp(rotate.x + center.x, top_left.x, bottom_right.x), clamp(rotate.y + center.y, top_left.y, bottom_right.y));
+
+    let diffuse_color = textureSample(textures[input.texture_index], nearest_sampler, texture_coordinates);
 
     if (diffuse_color.a != 1.0) {
         discard;

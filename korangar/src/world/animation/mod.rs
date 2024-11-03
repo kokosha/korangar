@@ -7,6 +7,7 @@ use ragnarok_packets::EntityId;
 use crate::graphics::{Camera, Color, EntityInstruction};
 use crate::loaders::{Actions, AnimationState, Sprite};
 use crate::world::EntityType;
+use crate::SpriteAtlas;
 
 #[derive(Clone, PrototypeElement)]
 pub struct AnimationData {
@@ -21,6 +22,8 @@ pub struct AnimationData {
 pub struct AnimationPair {
     pub sprites: Arc<Sprite>,
     pub actions: Arc<Actions>,
+    #[hidden_element]
+    pub sprites_atlas: Arc<SpriteAtlas>,
 }
 
 #[derive(Clone, PrototypeElement)]
@@ -105,7 +108,9 @@ impl AnimationData {
         for (index, frame_part) in frame.frame_parts.iter().enumerate() {
             let animation_index = frame_part.animation_index;
             let sprite_number = frame_part.sprite_number;
-            let texture = &self.animation_pair[animation_index].sprites.textures[sprite_number];
+            //let texture =
+            // &self.animation_pair[animation_index].sprites.textures[sprite_number];
+            let texture = &self.animation_pair[animation_index].sprites_atlas.texture;
 
             // The constant 10.0 is a magic scale factor of an image.
             // The vertex position is calculated from the center of image, so we need to
@@ -117,14 +122,25 @@ impl AnimationData {
 
             let origin = Point3::new(-position.x, position.y, 0.0);
             let scale = Vector2::from_value(0.7);
-            let cell_count = Vector2::new(1, 1);
-            let cell_position = Vector2::new(0, 0);
+            //let cell_count = Vector2::new(1, 1);
+            //let cell_position = Vector2::new(0, 0);
             let size = Vector2::new(frame.size.x as f32 * scale.x / 10.0, frame.size.y as f32 * scale.y / 10.0);
 
             let world_matrix = camera.billboard_matrix(entity_position, origin, size);
             let affine_matrix = frame_part.affine_matrix;
-            let texture_size = Vector2::new(1.0 / cell_count.x as f32, 1.0 / cell_count.y as f32);
-            let texture_position = Vector2::new(texture_size.x * cell_position.x as f32, texture_size.y * cell_position.y as f32);
+
+            let top_left =
+                self.animation_pair[animation_index].sprites_atlas.atlas_allocation[sprite_number].map_to_atlas(Vector2::new(0.0, 0.0));
+            let bottom_right =
+                self.animation_pair[animation_index].sprites_atlas.atlas_allocation[sprite_number].map_to_atlas(Vector2::new(1.0, 1.0));
+            //let texture_size = Vector2::new(1.0 / cell_count.x as f32, 1.0 / cell_count.y
+            // as f32);
+            let texture_size = bottom_right - top_left;
+
+            //let texture_position = Vector2::new(texture_size.x * cell_position.x as f32,
+            // texture_size.y * cell_position.y as f32);
+            let texture_position = top_left;
+
             let (depth_offset, curvature) = camera.calculate_depth_offset_and_curvature(&world_matrix, scale.x, scale.y);
 
             instructions.push(EntityInstruction {

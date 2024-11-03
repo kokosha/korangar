@@ -31,6 +31,8 @@ struct VertexOutput {
     @location(3) @interpolate(flat) original_depth_offset: f32,
     @location(4) @interpolate(flat) original_curvature: f32,
     @location(5) angle: f32,
+    @location(6) texture_position: vec2<f32>,
+    @location(7) texture_size: vec2<f32>,
 }
 
 @group(0) @binding(1) var nearest_sampler: sampler;
@@ -56,8 +58,11 @@ fn vs_main(
     output.position = pass_uniforms.view_projection * instance.world * frame_part_vertex;
     output.texture_coordinates = instance.texture_position + vertex.texture_coordinates * instance.texture_size;
 
+    output.texture_position = instance.texture_position;
+    output.texture_size = instance.texture_size;
+
     if (instance.mirror != 0u) {
-        output.texture_coordinates.x = 1.0 - output.texture_coordinates.x;
+        output.texture_coordinates = instance.texture_position + vec2<f32>(1.0 - vertex.texture_coordinates.x,  vertex.texture_coordinates.y) * instance.texture_size;
     }
 
     // The depth multiplier and curvature multiplier is derived from the truth table of vertex_data
@@ -76,10 +81,13 @@ fn vs_main(
 @fragment
 fn fs_main(input: VertexOutput) -> @builtin(frag_depth) f32 {
     // Apply the rotation from action
+    let center = input.texture_position + input.texture_size/2.0;
+    let top_left = input.texture_position;
+    let bottom_right = input.texture_position + input.texture_size;
     let sin_factor = sin(input.angle);
     let cos_factor = cos(input.angle);
-    let rotate = vec2(input.texture_coordinates.x - 0.5, input.texture_coordinates.y - 0.5) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
-    let texture_coordinates = vec2(clamp(rotate.x + 0.5, 0.0, 1.0), clamp(rotate.y + 0.5, 0.0, 1.0));
+    let rotate = vec2(input.texture_coordinates.x - center.x, input.texture_coordinates.y - center.y) * mat2x2(cos_factor, sin_factor, -sin_factor, cos_factor);
+    let texture_coordinates = vec2(clamp(rotate.x + center.x, top_left.x, bottom_right.x), clamp(rotate.y + center.y, top_left.y, bottom_right.y));
 
     let diffuse_color = textureSample(texture, nearest_sampler, texture_coordinates);
     if (diffuse_color.a != 1.0) {
