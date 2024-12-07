@@ -2065,7 +2065,8 @@ impl Client {
             );
 
             #[cfg_attr(feature = "debug", korangar_debug::debug_condition(render_settings.show_entities))]
-            self.map.render_entities(&mut self.entity_instructions, entities, current_camera);
+            self.map
+                .render_entities(&mut self.entity_instructions, entities, &self.player_camera);
 
             #[cfg_attr(feature = "debug", korangar_debug::debug_condition(render_settings.show_water))]
             self.map.render_water(&mut water_instruction, client_tick);
