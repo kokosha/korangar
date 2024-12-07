@@ -791,16 +791,6 @@ impl Client {
                     }
                 }
                 NetworkEvent::MapServerDisconnected { reason } => {
-                    if reason != DisconnectReason::ClosedByClient {
-                        // TODO: Make this an on-screen popup.
-                        #[cfg(feature = "debug")]
-                        print_debug!("Disconnection from the map server with error");
-                    }
-
-                    let login_data = self.saved_login_data.as_ref().unwrap();
-                    let server = self.saved_character_server.clone().unwrap();
-                    self.networking_system.connect_to_character_server(login_data, server);
-
                     self.entities.clear();
                     self.particle_holder.clear();
                     self.effect_holder.clear();
@@ -823,6 +813,32 @@ impl Client {
 
                     self.interface.close_all_windows_except(&mut self.focus_state);
 
+                    self.start_camera.set_focus_point(cgmath::Point3::new(600.0, 0.0, 240.0));
+                    self.directional_shadow_camera
+                        .set_focus_point(cgmath::Point3::new(600.0, 0.0, 240.0));
+
+                    if reason != DisconnectReason::ClosedByClient {
+                        // TODO: Make this an on-screen popup.
+                        #[cfg(feature = "debug")]
+                        print_debug!("Disconnection from the map server with error");
+
+                        // After the disconnect, you cannot directly connect to character server
+                        // As it will return Rejected from server
+                        let socket_address = self.saved_login_server_address.unwrap();
+                        self.networking_system
+                            .connect_to_login_server(socket_address, &self.saved_username, &self.saved_password);
+                        // TODO: find a way to connect, disconnect from login_server and connect
+                        // to character_server in the same interaction, the for loop with the
+                        // network doesn't allow it.
+
+                        // The connect to login need the response of packet, to accept the
+                        // connect_to_character_server
+                        return;
+                    }
+                    let login_data = self.saved_login_data.as_ref().unwrap();
+                    let server = self.saved_character_server.clone().unwrap();
+                    self.networking_system.connect_to_character_server(login_data, server);
+
                     let character_selection_window = CharacterSelectionWindow::new(
                         self.saved_characters.new_remote(),
                         self.move_request.new_remote(),
@@ -830,10 +846,6 @@ impl Client {
                     );
                     self.interface
                         .open_window(&self.application, &mut self.focus_state, &character_selection_window);
-
-                    self.start_camera.set_focus_point(cgmath::Point3::new(600.0, 0.0, 240.0));
-                    self.directional_shadow_camera
-                        .set_focus_point(cgmath::Point3::new(600.0, 0.0, 240.0));
                 }
                 NetworkEvent::ResurrectPlayer { entity_id } => {
                     // If the resurrected player is us, close the resurrect window.
