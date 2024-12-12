@@ -161,9 +161,38 @@ macro_rules! create_handler {
         }
     };
 }
+/// The function return a device list and you only need to copy
+/// what is in front of Device to the Device with correct Description
+fn print_device_list() {
+    match pcap::Device::list() {
+        Ok(devices) => {
+            println!("Available devices:\n");
+            for device in devices {
+                println!("Device: {:?}", device.name);
+                if let Some(description) = device.desc {
+                    println!("Description: {:?}", description);
+                }
+                println!("");
+            }
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+        }
+    }
+}
 
 fn main() {
-    const DEVICE: &str = "wlp5s0";
+    // Change the DEVICE with your network device
+    // Windows Format
+    // const DEVICE: &str = "\\Device\\NPF_{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}";
+    // Linux Format
+    // const DEVICE: &str = "wlpXsX";
+    // const DEVICE: &str = "enpXsX";
+    // const DEVICE: &str = "ensXX";
+    // MacOS Formart
+    // const DEVICE: &str = "enX";
+    const DEVICE: &str = "\\Device\\NPF_{093611E7-1E8D-48B5-ABDC-3885CFB7256F}";
+    print_device_list();
 
     const LOGIN_SERVER_PORT: u16 = 6900;
     const CHARACTER_SERVER_PORT: u16 = 6121;
@@ -187,6 +216,10 @@ fn main() {
         LoginFailedPacket,
         CharacterServerLoginSuccessPacket,
         RequestCharacterListSuccessPacket,
+        CharacterListPacket,
+        CharacterSlotPagePacket,
+        CharacterBanListPacket,
+        LoginPincodePacket,
         Packet0b18,
         CharacterSelectionSuccessPacket,
         CharacterSelectionFailedPacket,
@@ -199,12 +232,9 @@ fn main() {
     ]);
 
     let mut server_character_handler = create_handler!(ServerType::Character, Direction::Outgoing, [
+        CharacterServerLoginPacket,
         CharacterServerKeepalivePacket,
         RequestCharacterListPacket,
-        CharacterListPacket,
-        CharacterSlotPagePacket,
-        CharacterBanListPacket,
-        LoginPincodePacket,
         SelectCharacterPacket,
         CreateCharacterPacket,
         DeleteCharacterPacket,
