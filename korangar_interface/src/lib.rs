@@ -306,10 +306,10 @@ where
 
     #[cfg_attr(feature = "debug", korangar_debug::profile)]
     pub fn scroll_element(&mut self, element: &ElementCell<App>, window_index: usize, scroll_delta: f32) {
-        let (_, post_update) = &mut self.windows[window_index];
-
-        if let Some(change_event) = element.borrow_mut().scroll(scroll_delta) {
-            Self::handle_change_event(&mut self.post_update, post_update, change_event);
+        if let Some((_, post_update)) = &mut self.windows.get_mut(window_index) {
+            if let Some(change_event) = element.borrow_mut().scroll(scroll_delta) {
+                Self::handle_change_event(&mut self.post_update, post_update, change_event);
+            }
         }
     }
 
