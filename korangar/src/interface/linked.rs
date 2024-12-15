@@ -62,6 +62,7 @@ mod test {
         let element = LinkedElement::new();
 
         assert!(!element.is_linked());
+        #[cfg(feature = "debug")]
         assert!(!element.is_hidden());
     }
 
@@ -73,6 +74,7 @@ mod test {
         element.link(&parent);
 
         assert!(element.is_linked());
+        #[cfg(feature = "debug")]
         assert!(!element.is_hidden());
         assert!(element.is_linked_to(&parent));
     }
@@ -86,6 +88,7 @@ mod test {
         element.link(&parent);
 
         assert!(element.is_linked());
+        #[cfg(feature = "debug")]
         assert!(!element.is_hidden());
         assert!(!element.is_linked_to(&stranger));
     }
@@ -94,9 +97,11 @@ mod test {
     fn links_can_be_hidden() {
         let element = LinkedElement::new();
 
+        #[cfg(feature = "debug")]
         element.link_hidden();
 
         assert!(element.is_linked());
+        #[cfg(feature = "debug")]
         assert!(element.is_hidden());
     }
 }
