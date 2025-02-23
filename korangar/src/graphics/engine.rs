@@ -1067,6 +1067,10 @@ impl GraphicsEngine {
                 engine_context
                     .post_processing_wboit_resolve_drawer
                     .draw(&mut render_pass, blitter_data);
+
+                spin_sleep::sleep(std::time::Duration::new(0, 12_000_000));
+                println!("{:?}", render_pass);
+                drop(render_pass);
             }
 
             let render_pass = match engine_context.global_context.supersampled_color_texture.as_ref() {
