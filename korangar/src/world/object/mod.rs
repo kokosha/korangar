@@ -29,7 +29,9 @@ pub struct Object {
 
 impl Object {
     pub fn render_geometry(&self, instructions: &mut Vec<ModelInstruction>, client_tick: ClientTick, camera: &dyn Camera) {
-        self.model.render_geometry(instructions, &self.transform, client_tick, camera);
+        if self.model.version.equals_or_above(2, 2) && self.model.version.smaller(2, 3) {
+            self.model.render_geometry(instructions, &self.transform, client_tick, camera);
+        }
     }
 
     pub fn get_bounding_box_matrix(&self) -> Matrix4<f32> {

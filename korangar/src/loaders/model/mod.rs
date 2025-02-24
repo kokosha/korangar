@@ -10,7 +10,7 @@ use korangar_util::collision::AABB;
 use korangar_util::math::multiply_matrix4_and_point3;
 use korangar_util::texture_atlas::AllocationId;
 use ragnarok_bytes::{ByteReader, FromBytes};
-use ragnarok_formats::model::{ModelData, NodeData};
+use ragnarok_formats::model::{ModelData, ModelString, NodeData};
 use ragnarok_formats::version::InternalVersion;
 
 use super::error::LoadError;
@@ -84,7 +84,8 @@ impl ModelLoader {
         let mut face_index = 0;
         let mut back_face_index = face_vertex_count;
 
-        let array: [f32; 3] = node.scale.unwrap().into();
+        //TODO: FIX HERE
+        let array: [f32; 3] = node.scale.unwrap_or(Vector3::new(1.0, 1.0, 1.0)).into();
         let reverse_node_order = array.into_iter().fold(1.0, |a, b| a * b).is_sign_negative();
 
         if reverse_node_order {
@@ -107,7 +108,8 @@ impl ModelLoader {
                 None => [face.smooth_group, -1, -1],
                 Some(extras) if extras.len() == 1 => [face.smooth_group, extras[0], -1],
                 Some(extras) if extras.len() == 2 => [face.smooth_group, extras[0], extras[1]],
-                _ => panic!("more than three smoothing groups found"),
+                //TODO: FIX HERE
+                _ => [face.smooth_group, -1, -1],
             };
 
             Self::add_vertices(
@@ -144,21 +146,33 @@ impl ModelLoader {
         native_vertices
     }
 
-    fn calculate_matrices(node: &NodeData, parent_matrix: &Matrix4<f32>) -> (Matrix4<f32>, Matrix4<f32>, Matrix4<f32>) {
-        let main = Matrix4::from_translation(node.translation1.unwrap()) * Matrix4::from(node.offset_matrix);
-        let scale = node.scale.unwrap();
-        let scale_matrix = Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
-        let rotation_matrix = Matrix4::from_axis_angle(node.rotation_axis.unwrap(), Rad(node.rotation_angle.unwrap()));
-        let translation_matrix = Matrix4::from_translation(node.translation2);
+    fn calculate_matrices(
+        version: InternalVersion,
+        node: &NodeData,
+        parent_matrix: &Matrix4<f32>,
+    ) -> (Matrix4<f32>, Matrix4<f32>, Matrix4<f32>) {
+        if version.equals_or_above(2, 2) {
+            let main = Matrix4::from(node.offset_matrix);
 
-        let transform = match node.rotation_keyframe_count > 0 {
-            true => translation_matrix * scale_matrix,
-            false => translation_matrix * rotation_matrix * scale_matrix,
-        };
+            let translation_matrix = Matrix4::from_translation(node.translation2);
+            let transform = translation_matrix;
+            (main, transform, transform)
+        } else {
+            let main = Matrix4::from_translation(node.translation1.unwrap()) * Matrix4::from(node.offset_matrix);
+            let scale = node.scale.unwrap();
+            let scale_matrix = Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
+            let rotation_matrix = Matrix4::from_axis_angle(node.rotation_axis.unwrap(), Rad(node.rotation_angle.unwrap()));
+            let translation_matrix = Matrix4::from_translation(node.translation2);
 
-        let box_transform = parent_matrix * translation_matrix * rotation_matrix * scale_matrix;
+            let transform = match node.rotation_keyframe_count > 0 {
+                true => translation_matrix * scale_matrix,
+                false => translation_matrix * rotation_matrix * scale_matrix,
+            };
 
-        (main, transform, box_transform)
+            let box_transform = parent_matrix * translation_matrix * rotation_matrix * scale_matrix;
+
+            (main, transform, box_transform)
+        }
     }
 
     fn calculate_centroid(vertices: &[NativeModelVertex]) -> Point3<f32> {
@@ -169,6 +183,7 @@ impl ModelLoader {
     }
 
     fn process_node_mesh(
+        version: InternalVersion,
         current_node: &NodeData,
         nodes: &[NodeData],
         processed_node_indices: &mut [bool],
@@ -181,7 +196,7 @@ impl ModelLoader {
         smooth_normals: bool,
         animation_length: u32,
     ) -> Node {
-        let (main_matrix, transform_matrix, box_transform_matrix) = Self::calculate_matrices(current_node, parent_matrix);
+        let (main_matrix, transform_matrix, box_transform_matrix) = Self::calculate_matrices(version, current_node, parent_matrix);
 
         let box_matrix = box_transform_matrix * main_matrix;
         let bounding_box = AABB::from_vertices(
@@ -205,6 +220,7 @@ impl ModelLoader {
             .iter()
             .map(|&index| {
                 Self::process_node_mesh(
+                    version,
                     &nodes[index],
                     nodes,
                     processed_node_indices,
@@ -231,8 +247,8 @@ impl ModelLoader {
             .unzip();
 
         let has_transparent_parts = texture_transparency.iter().any(|x| *x);
-
-        let mut node_native_vertices = Self::make_vertices(current_node, &main_matrix, reverse_order, smooth_normals);
+        let new_reverse_order = reverse_order ^ version.equals_or_above(2, 2);
+        let mut node_native_vertices = Self::make_vertices(current_node, &main_matrix, new_reverse_order, smooth_normals);
         let centroid = Self::calculate_centroid(&node_native_vertices);
 
         node_native_vertices
@@ -246,6 +262,7 @@ impl ModelLoader {
         native_vertices.extend(node_native_vertices.iter());
 
         Node::new(
+            version,
             transform_matrix,
             centroid,
             has_transparent_parts,
@@ -271,8 +288,10 @@ impl ModelLoader {
                     bounding_box.max().y,
                     bounding_box.center().z,
                 ));
-
-                translation_matrix * node.transform_matrix
+                match node.version.equals_or_above(2, 2) {
+                    true => node.transform_matrix,
+                    false => translation_matrix * node.transform_matrix,
+                }
             }
             false => node.transform_matrix,
         };
@@ -348,8 +367,9 @@ impl ModelLoader {
         // TODO: The model operation to scale keyframe is not implemented yet.
         // TODO: The model operation to translate keyframe is not implemented yet.
         // TODO: The model operation to modify texture keyframe is not implemented yet.
+
         let version: InternalVersion = model_data.version.into();
-        if version.equals_or_above(2, 2) {
+        if version.equals_or_above(2, 3) {
             #[cfg(feature = "debug")]
             {
                 print_debug!("Failed to load model because version {} is unsupported", version);
@@ -374,13 +394,22 @@ impl ModelLoader {
             })
             .collect();
 
-        let root_node_name = &model_data.root_node_name.clone().unwrap();
+        let mut root_node_names = Vec::<ModelString<40>>::new();
+
+        if version.equals_or_above(2, 2) {
+            for i in 0..model_data.root_node_count.unwrap() {
+                root_node_names.push(model_data.root_node_names[i as usize].clone());
+            }
+        } else {
+            let root_node_name = model_data.root_node_name.clone().unwrap();
+            root_node_names.push(root_node_name);
+        }
 
         let (root_node_position, root_node) = model_data
             .nodes
             .iter()
             .enumerate()
-            .find(|(_, node_data)| &node_data.node_name == root_node_name)
+            .find(|(_, node_data)| node_data.node_name == root_node_names[0])
             .expect("failed to find main node");
 
         let mut processed_node_indices = vec![false; model_data.nodes.len()];
@@ -390,6 +419,7 @@ impl ModelLoader {
 
         let mut bounding_box = AABB::uninitialized();
         let root_node = Self::process_node_mesh(
+            version,
             root_node,
             &model_data.nodes,
             &mut processed_node_indices,
@@ -411,6 +441,7 @@ impl ModelLoader {
         }
 
         let model = Model::new(
+            version,
             root_nodes,
             bounding_box,
             is_static,
