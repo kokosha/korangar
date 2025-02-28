@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use cgmath::{EuclideanSpace, Matrix4, Point3, Rad, SquareMatrix, Vector2, Vector3};
 use derive_new::new;
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 #[cfg(feature = "debug")]
 use korangar_debug::logging::{Colorize, Timer, print_debug};
 use korangar_util::FileLoader;
@@ -190,10 +190,12 @@ impl ModelLoader {
         vertex_offset: &mut usize,
         native_vertices: &mut Vec<NativeModelVertex>,
         model_texture_mapping: &[ModelTexture],
+        hashmap_texture: &HashMap<String, i32>,
         parent_matrix: &Matrix4<f32>,
         main_bounding_box: &mut AABB,
         reverse_order: bool,
         smooth_normals: bool,
+        frames_per_second: f32,
         animation_length: u32,
     ) -> Node {
         let (main_matrix, transform_matrix, box_transform_matrix) = Self::calculate_matrices(version, current_node, parent_matrix);
@@ -227,25 +229,37 @@ impl ModelLoader {
                     vertex_offset,
                     native_vertices,
                     model_texture_mapping,
+                    &hashmap_texture,
                     &box_transform_matrix,
                     main_bounding_box,
                     reverse_order,
                     smooth_normals,
+                    frames_per_second,
                     animation_length,
                 )
             })
             .collect();
 
         // Map the node texture index to the model texture index.
-        let (node_texture_mapping, texture_transparency): (Vec<i32>, Vec<bool>) = current_node
-            .texture_indices
-            .iter()
-            .map(|&index| {
-                let model_texture = model_texture_mapping[index as usize];
-                (model_texture.index, model_texture.transparent)
-            })
-            .unzip();
-
+        let (node_texture_mapping, texture_transparency): (Vec<i32>, Vec<bool>) = match version.equals_or_above(2, 3) {
+            false => current_node
+                .texture_indices
+                .iter()
+                .map(|&index| {
+                    let model_texture = model_texture_mapping[index as usize];
+                    (model_texture.index, model_texture.transparent)
+                })
+                .unzip(),
+            true => current_node
+                .texture_names
+                .iter()
+                .map(|name| {
+                    let index = hashmap_texture.get(name.as_ref()).unwrap();
+                    let model_texture = model_texture_mapping[*index as usize];
+                    (model_texture.index, model_texture.transparent)
+                })
+                .unzip(),
+        };
         let has_transparent_parts = texture_transparency.iter().any(|x| *x);
         let new_reverse_order = reverse_order ^ version.equals_or_above(2, 2);
         let mut node_native_vertices = Self::make_vertices(current_node, &main_matrix, new_reverse_order, smooth_normals);
@@ -269,6 +283,7 @@ impl ModelLoader {
             node_vertex_offset,
             node_vertex_count,
             child_nodes,
+            frames_per_second,
             animation_length,
             current_node.rotation_keyframes.clone(),
         )
@@ -369,7 +384,7 @@ impl ModelLoader {
         // TODO: The model operation to modify texture keyframe is not implemented yet.
 
         let version: InternalVersion = model_data.version.into();
-        if version.equals_or_above(2, 3) {
+        if version.equals_or_above(2, 4) {
             #[cfg(feature = "debug")]
             {
                 print_debug!("Failed to load model because version {} is unsupported", version);
@@ -379,11 +394,30 @@ impl ModelLoader {
             return self.load(texture_atlas, vertex_offset, FALLBACK_MODEL_FILE, reverse_order);
         }
 
-        let texture_allocation: Vec<TextureAtlasEntry> = model_data
-            .texture_names
+        let texture_names: Vec<String> = match version.equals_or_above(2, 3) {
+            false => model_data
+                .texture_names
+                .iter()
+                .map(|texture_name| texture_name.as_ref().to_string())
+                .collect(),
+            true => model_data
+                .nodes
+                .iter()
+                .flat_map(|node_data| node_data.texture_names.iter().map(|name| name.as_ref().to_string()))
+                .collect::<HashSet<_>>() // TODO: seems not deterministic
+                .into_iter()
+                .collect(),
+        };
+
+        let texture_allocation: Vec<TextureAtlasEntry> = texture_names
             .iter()
             .map(|texture_name| texture_atlas.register(texture_name.as_ref()))
             .collect();
+
+        let mut hashmap_texture = HashMap::<String, i32>::new();
+        texture_names.iter().enumerate().for_each(|(index, name)| {
+            hashmap_texture.insert(name.to_string(), index.try_into().unwrap());
+        });
 
         let texture_mapping: Vec<ModelTexture> = texture_allocation
             .iter()
@@ -426,13 +460,15 @@ impl ModelLoader {
             vertex_offset,
             &mut native_model_vertices,
             &texture_mapping,
+            &hashmap_texture,
             &Matrix4::identity(),
             &mut bounding_box,
             reverse_order,
             model_data.shade_type == 2,
+            model_data.frames_per_second.unwrap_or(1000.0),
             model_data.animation_length,
         );
-
+        drop(hashmap_texture);
         let mut root_nodes = vec![root_node];
         let is_static = root_nodes.iter().all(Self::is_static);
 

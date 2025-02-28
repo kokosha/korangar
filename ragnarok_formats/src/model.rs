@@ -21,9 +21,7 @@ impl<const LENGTH: usize> FromBytes for ModelString<LENGTH> {
             .equals_or_above(2, 2)
         {
             let length = u32::from_bytes(byte_reader).trace::<Self>()? as usize;
-            let mut inner = String::from_n_bytes(byte_reader, length).trace::<Self>()?;
-            // need to remove the last character for some reason
-            inner.pop();
+            let inner = String::from_n_bytes(byte_reader, length).trace::<Self>()?;
             inner
         } else {
             String::from_n_bytes(byte_reader, LENGTH).trace::<Self>()?

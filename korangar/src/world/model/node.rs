@@ -19,13 +19,17 @@ pub struct Node {
     pub vertex_offset: usize,
     pub vertex_count: usize,
     pub child_nodes: Vec<Node>,
+    pub frames_per_second: f32,
     pub animation_length: u32,
     pub rotation_keyframes: Vec<RotationKeyframeData>,
 }
 
 impl Node {
     fn animation_matrix(&self, client_tick: ClientTick) -> Matrix4<f32> {
-        let animation_tick = client_tick.0 % self.animation_length;
+        let timestamp = (client_tick.0 as f32 * self.frames_per_second / 1000.0) as u32;
+        //let timestamp = client_tick.0;
+
+        let animation_tick = timestamp % self.animation_length;
 
         let last_keyframe_index = self
             .rotation_keyframes
