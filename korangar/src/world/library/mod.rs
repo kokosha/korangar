@@ -127,7 +127,10 @@ impl Library {
     pub fn get_job_identity_from_id(&self, job_id: usize) -> &str {
         self.job_identity_table
             .get(&job_id)
-            .map(|name| name.as_str())
+            .map(|name| {
+                println!("{:?}", name.as_str());
+                name.as_str()
+            })
             .unwrap_or("1_f_maria")
     }
 
