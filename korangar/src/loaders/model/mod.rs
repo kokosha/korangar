@@ -285,6 +285,8 @@ impl ModelLoader {
             child_nodes,
             frames_per_second,
             animation_length,
+            current_node.scale_keyframes.clone(),
+            current_node.translation_keyframes.clone(),
             current_node.rotation_keyframes.clone(),
         )
     }
@@ -323,7 +325,10 @@ impl ModelLoader {
 
     // A model is static, if it doesn't have any animations.
     pub fn is_static(node: &Node) -> bool {
-        node.rotation_keyframes.is_empty() && node.child_nodes.iter().all(Self::is_static)
+        node.scale_keyframes.is_empty()
+            && node.translation_keyframes.is_empty()
+            && node.rotation_keyframes.is_empty()
+            && node.child_nodes.iter().all(Self::is_static)
     }
 
     pub fn collect_model_textures(&self, textures: &mut HashSet<String>, model_file: &str) {
@@ -379,10 +384,11 @@ impl ModelLoader {
         };
 
         // TODO: Temporary check until we support more versions.
-        // TODO: The model operation to scale keyframe is not implemented yet.
-        // TODO: The model operation to translate keyframe is not implemented yet.
-        // TODO: The model operation to modify texture keyframe is not implemented yet.
-
+        // TODO: The model operation to scale keyframe is implemented, but not working
+        // properly yet.
+        // TODO: The model operation to translate keyframe is implemented, but not
+        // working properly yet.
+        // TODO: The model operation  to modify texture keyframe is not implemented yet.
         let version: InternalVersion = model_data.version.into();
         if version.equals_or_above(2, 4) {
             #[cfg(feature = "debug")]
@@ -465,15 +471,17 @@ impl ModelLoader {
             &mut bounding_box,
             reverse_order,
             model_data.shade_type == 2,
-            model_data.frames_per_second.unwrap_or(1000.0),
+            model_data.frames_per_second.unwrap_or(60.0),
             model_data.animation_length,
         );
         drop(hashmap_texture);
         let mut root_nodes = vec![root_node];
         let is_static = root_nodes.iter().all(Self::is_static);
 
-        for root_node in root_nodes.iter_mut() {
-            Self::calculate_transformation_matrix(root_node, true, bounding_box, Matrix4::identity(), is_static);
+        if version.smaller(2, 2) {
+            for root_node in root_nodes.iter_mut() {
+                Self::calculate_transformation_matrix(root_node, true, bounding_box, Matrix4::identity(), is_static);
+            }
         }
 
         let model = Model::new(

@@ -53,7 +53,7 @@ where
     }
 }
 
-#[derive(Debug, ByteConvertable)]
+#[derive(Clone, Debug, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
 pub struct ScaleKeyframeData {
     pub frame: u32,
@@ -67,7 +67,7 @@ pub struct RotationKeyframeData {
     pub quaternions: Quaternion<f32>,
 }
 
-#[derive(Debug, ByteConvertable)]
+#[derive(Clone, Debug, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
 pub struct TranslationKeyframeData {
     pub frame: u32,
@@ -89,6 +89,7 @@ pub struct TexturesKeyframeData {
 /// See: https://rathena.org/board/topic/127587-rsm2-file-format/
 #[derive(Debug, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
+#[numeric_type(u32)]
 pub enum TextureOperation {
     /// Texture translation on the X axis. The texture is tiled.
     TranslationX,
