@@ -285,6 +285,8 @@ impl ModelLoader {
             child_nodes,
             frames_per_second,
             animation_length,
+            current_node.scale_keyframes.clone(),
+            current_node.translation_keyframes.clone(),
             current_node.rotation_keyframes.clone(),
         )
     }

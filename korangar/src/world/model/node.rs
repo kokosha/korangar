@@ -1,7 +1,7 @@
-use cgmath::{Matrix4, Point3, SquareMatrix, Transform as PointTransform};
+use cgmath::{Matrix4, Point3, SquareMatrix, Transform as PointTransform, VectorSpace};
 use derive_new::new;
 use korangar_interface::elements::PrototypeElement;
-use ragnarok_formats::model::RotationKeyframeData;
+use ragnarok_formats::model::{RotationKeyframeData, ScaleKeyframeData, TranslationKeyframeData};
 use ragnarok_formats::version::InternalVersion;
 use ragnarok_packets::ClientTick;
 
@@ -23,14 +23,68 @@ pub struct Node {
     pub child_nodes: Vec<Node>,
     pub frames_per_second: f32,
     pub animation_length: u32,
+    pub scale_keyframes: Vec<ScaleKeyframeData>,
+    pub translation_keyframes: Vec<TranslationKeyframeData>,
     pub rotation_keyframes: Vec<RotationKeyframeData>,
 }
 
 impl Node {
-    fn animaton_matrix(&self, client_tick: ClientTick) -> Matrix4<f32> {
+    fn scale_animation_matrix(&self, client_tick: ClientTick) -> Matrix4<f32> {
         let timestamp = (client_tick.0 as f32 * self.frames_per_second / 1000.0) as u32;
-        //let timestamp = client_tick.0;
+        let animation_tick = timestamp % self.animation_length;
 
+        let last_keyframe_index = self
+            .scale_keyframes
+            .binary_search_by(|keyframe| keyframe.frame.cmp(&animation_tick))
+            .unwrap_or_else(|keyframe_index| {
+                // Err(i) returns the index where the searched element could be inserted to
+                // retain the sort order. This means, that we haven't reached a
+                // new keyframe yet and need to use the previous keyframe, hence
+                // the saturating sub.
+                keyframe_index.saturating_sub(1)
+            });
+
+        let last_step = &self.scale_keyframes[last_keyframe_index];
+        let next_step = &self.scale_keyframes[(last_keyframe_index + 1) % self.scale_keyframes.len()];
+
+        let total = next_step.frame.saturating_sub(last_step.frame);
+        let offset = animation_tick.saturating_sub(last_step.frame);
+
+        let animation_elapsed = (1.0 / total as f32) * offset as f32;
+        let current_scale = last_step.scale.lerp(next_step.scale, animation_elapsed);
+
+        Matrix4::from_nonuniform_scale(current_scale.x, current_scale.y, current_scale.z)
+    }
+
+    fn translation_animation_matrix(&self, client_tick: ClientTick) -> Matrix4<f32> {
+        let timestamp = (client_tick.0 as f32 * self.frames_per_second / 1000.0) as u32;
+        let animation_tick = timestamp % self.animation_length;
+
+        let last_keyframe_index = self
+            .translation_keyframes
+            .binary_search_by(|keyframe| keyframe.frame.cmp(&animation_tick))
+            .unwrap_or_else(|keyframe_index| {
+                // Err(i) returns the index where the searched element could be inserted to
+                // retain the sort order. This means, that we haven't reached a
+                // new keyframe yet and need to use the previous keyframe, hence
+                // the saturating sub.
+                keyframe_index.saturating_sub(1)
+            });
+
+        let last_step = &self.translation_keyframes[last_keyframe_index];
+        let next_step = &self.translation_keyframes[(last_keyframe_index + 1) % self.translation_keyframes.len()];
+
+        let total = next_step.frame.saturating_sub(last_step.frame);
+        let offset = animation_tick.saturating_sub(last_step.frame);
+
+        let animation_elapsed = (1.0 / total as f32) * offset as f32;
+        let current_translation = last_step.translation.lerp(next_step.translation, animation_elapsed);
+
+        Matrix4::from_translation(current_translation)
+    }
+
+    fn rotation_animation_matrix(&self, client_tick: ClientTick) -> Matrix4<f32> {
+        let timestamp = (client_tick.0 as f32 * self.frames_per_second / 1000.0) as u32;
         let animation_tick = timestamp % self.animation_length;
 
         let last_keyframe_index = self
@@ -60,12 +114,20 @@ impl Node {
         if is_static == true {
             parent_matrix * self.static_node_matrix
         } else {
+            let animation_scale_matrix = match self.scale_keyframes.is_empty() {
+                true => Matrix4::identity(),
+                false => self.scale_animation_matrix(client_tick),
+            };
+            let animation_translation_matrix = match self.translation_keyframes.is_empty() {
+                true => Matrix4::identity(),
+                false => self.translation_animation_matrix(client_tick),
+            };
             let animation_rotation_matrix = match self.rotation_keyframes.is_empty() {
                 true => Matrix4::identity(),
-                false => self.animaton_matrix(client_tick),
+                false => self.rotation_animation_matrix(client_tick),
             };
 
-            parent_matrix * self.transform_matrix * animation_rotation_matrix
+            parent_matrix * self.transform_matrix * animation_scale_matrix * animation_translation_matrix * animation_rotation_matrix
         }
     }
 
