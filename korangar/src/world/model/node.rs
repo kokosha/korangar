@@ -8,13 +8,15 @@ use ragnarok_packets::ClientTick;
 use crate::graphics::ModelInstruction;
 use crate::world::Camera;
 
-const CLIENT_TICK_PER_SECOND: u32 = 10000;
+const CLIENT_TICK_PER_SECOND: u32 = 5000;
 
 #[derive(PrototypeElement, new)]
 pub struct Node {
     pub version: InternalVersion,
     #[hidden_element]
     pub transform_matrix: Matrix4<f32>,
+    #[hidden_element]
+    pub parent_transform_matrix: Matrix4<f32>,
     #[hidden_element]
     pub centroid: Point3<f32>,
     pub transparent: bool,
@@ -157,7 +159,10 @@ impl Node {
                     false => self.scale_animation_matrix(client_tick),
                 };
                 let animation_translation_matrix = match self.translation_keyframes.is_empty() {
-                    true => Matrix4::identity(),
+                    true => match self.version.smaller(2, 2) {
+                        true => Matrix4::<f32>::identity(),
+                        false => self.transform_matrix * self.parent_transform_matrix.invert().unwrap(),
+                    },
                     false => self.translation_animation_matrix(client_tick),
                 };
                 let animation_rotation_matrix = match self.rotation_keyframes.is_empty() {
@@ -166,14 +171,9 @@ impl Node {
                 };
 
                 if self.version.smaller(2, 2) {
-                    parent_matrix
-                        * self.transform_matrix
-                        * animation_scale_matrix
-                        * animation_translation_matrix
-                        * animation_rotation_matrix
+                    parent_matrix * self.transform_matrix * animation_rotation_matrix * animation_scale_matrix
                 } else {
-                    // TODO: fix the dynamic part
-                    parent_matrix * animation_scale_matrix * animation_translation_matrix * animation_rotation_matrix
+                    parent_matrix * animation_translation_matrix * animation_rotation_matrix * animation_scale_matrix
                 }
             }
         }
@@ -199,6 +199,14 @@ impl Node {
         let position = model_matrix.transform_point(self.centroid);
         let distance = camera.distance_to(position) + draw_order_offset;
 
+        instructions.push(ModelInstruction {
+            model_matrix,
+            vertex_offset: self.vertex_offset,
+            vertex_count: self.vertex_count,
+            distance,
+            transparent: self.transparent,
+        });
+
         // When the render_geometry is set as static, the model matrix
         // is already pre-calculated.
         // When the render_geometry is set as dynamic, the model matrix
@@ -209,17 +217,9 @@ impl Node {
             false => &model_matrix,
         };
 
-        instructions.push(ModelInstruction {
-            model_matrix,
-            vertex_offset: self.vertex_offset,
-            vertex_count: self.vertex_count,
-            distance,
-            transparent: self.transparent,
-        });
-
         self.child_nodes
             .iter()
             .enumerate()
-            .for_each(|(node_index, node)| node.render_geometry(instructions, client_tick, camera, node_index, parent_matrix, is_static));
+            .for_each(|(node_index, node)| node.render_geometry(instructions, client_tick, camera, node_index, &parent_matrix, is_static));
     }
 }

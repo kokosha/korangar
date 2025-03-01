@@ -153,7 +153,6 @@ impl ModelLoader {
     ) -> (Matrix4<f32>, Matrix4<f32>, Matrix4<f32>) {
         if version.equals_or_above(2, 2) {
             let main = Matrix4::from(node.offset_matrix);
-
             let translation_matrix = Matrix4::from_translation(node.translation2);
             let transform = translation_matrix;
             (main, transform, transform)
@@ -278,6 +277,7 @@ impl ModelLoader {
         Node::new(
             version,
             transform_matrix,
+            Matrix4::<f32>::identity(),
             centroid,
             has_transparent_parts,
             node_vertex_offset,
@@ -295,7 +295,7 @@ impl ModelLoader {
         node: &mut Node,
         is_root: bool,
         bounding_box: AABB,
-        parent_matrix: Matrix4<f32>,
+        parent_matrix: &Matrix4<f32>,
         is_static: bool,
     ) {
         let transform_matrix = match is_root {
@@ -312,14 +312,20 @@ impl ModelLoader {
             }
             false => node.transform_matrix,
         };
-
-        node.transform_matrix = match is_static {
-            true => parent_matrix * transform_matrix,
-            false => transform_matrix,
-        };
+        match node.version.equals_or_above(2, 2) {
+            false => {
+                node.transform_matrix = match is_static {
+                    true => parent_matrix * transform_matrix,
+                    false => transform_matrix,
+                };
+            }
+            true => {
+                node.parent_transform_matrix = *parent_matrix;
+            }
+        }
 
         node.child_nodes.iter_mut().for_each(|child_node| {
-            Self::calculate_transformation_matrix(child_node, false, bounding_box, node.transform_matrix, is_static);
+            Self::calculate_transformation_matrix(child_node, false, bounding_box, &node.transform_matrix, is_static);
         });
     }
 
@@ -388,7 +394,7 @@ impl ModelLoader {
         // properly yet.
         // TODO: The model operation to translate keyframe is implemented, but not
         // working properly yet.
-        // TODO: The model operation  to modify texture keyframe is not implemented yet.
+        // TODO: The model operation to modify texture keyframe is not implemented yet.
         let version: InternalVersion = model_data.version.into();
         if version.equals_or_above(2, 4) {
             #[cfg(feature = "debug")]
@@ -476,14 +482,15 @@ impl ModelLoader {
         );
         drop(hashmap_texture);
         let mut root_nodes = vec![root_node];
-        let is_static = root_nodes.iter().all(Self::is_static);
+        let is_static = match version.equals_or_above(2, 2) {
+            // TODO: Need to add the dynamic RSM2.
+            true => root_nodes.iter().all(Self::is_static), //true,
+            false => root_nodes.iter().all(Self::is_static),
+        };
 
-        if version.smaller(2, 2) {
-            for root_node in root_nodes.iter_mut() {
-                Self::calculate_transformation_matrix(root_node, true, bounding_box, Matrix4::identity(), is_static);
-            }
+        for root_node in root_nodes.iter_mut() {
+            Self::calculate_transformation_matrix(root_node, true, bounding_box, &Matrix4::identity(), is_static);
         }
-
         let model = Model::new(
             version,
             root_nodes,
