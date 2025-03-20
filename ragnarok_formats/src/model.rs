@@ -52,6 +52,11 @@ where
     }
 }
 
+pub trait KeyframeData {
+    fn get_frame(&self) -> i32;
+    fn set_frame(&mut self, value: i32);
+}
+
 #[derive(Clone, Debug, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
 pub struct ScaleKeyframeData {
@@ -59,11 +64,32 @@ pub struct ScaleKeyframeData {
     pub scale: Vector3<f32>,
     reserved: f32,
 }
+
+impl KeyframeData for ScaleKeyframeData {
+    fn get_frame(&self) -> i32 {
+        return self.frame;
+    }
+
+    fn set_frame(&mut self, value: i32) {
+        self.frame = value;
+    }
+}
+
 #[derive(Clone, Debug, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
 pub struct RotationKeyframeData {
     pub frame: i32,
     pub quaternions: Quaternion<f32>,
+}
+
+impl KeyframeData for RotationKeyframeData {
+    fn get_frame(&self) -> i32 {
+        return self.frame;
+    }
+
+    fn set_frame(&mut self, value: i32) {
+        self.frame = value;
+    }
 }
 
 #[derive(Clone, Debug, ByteConvertable)]
@@ -74,7 +100,17 @@ pub struct TranslationKeyframeData {
     reserved: f32,
 }
 
-#[derive(Debug, ByteConvertable)]
+impl KeyframeData for TranslationKeyframeData {
+    fn get_frame(&self) -> i32 {
+        return self.frame;
+    }
+
+    fn set_frame(&mut self, value: i32) {
+        self.frame = value;
+    }
+}
+
+#[derive(Clone, Debug, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
 pub struct TexturesKeyframeData {
     pub texture_index: u32,
@@ -86,7 +122,7 @@ pub struct TexturesKeyframeData {
 
 /// List of texture operation types.
 /// See: https://rathena.org/board/topic/127587-rsm2-file-format/
-#[derive(Debug, ByteConvertable)]
+#[derive(Clone, Debug, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
 #[numeric_type(u32)]
 pub enum TextureOperation {
@@ -102,7 +138,7 @@ pub enum TextureOperation {
     Rotation,
 }
 
-#[derive(Debug, ByteConvertable)]
+#[derive(Clone, Debug, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
 pub struct TextureKeyframeData {
     pub operation_type: TextureOperation,
@@ -112,7 +148,7 @@ pub struct TextureKeyframeData {
     pub texture_frames: Vec<TextureFrameData>,
 }
 
-#[derive(Debug, ByteConvertable)]
+#[derive(Clone, Debug, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(korangar_interface::elements::PrototypeElement))]
 pub struct TextureFrameData {
     pub frame: i32,

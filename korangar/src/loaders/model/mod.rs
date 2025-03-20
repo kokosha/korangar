@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cgmath::{Array, EuclideanSpace, Matrix4, Point3, Rad, SquareMatrix, Vector2, Vector3};
+use cgmath::{Array, EuclideanSpace, Matrix4, Point3, Quaternion, Rad, SquareMatrix, Vector2, Vector3};
 use derive_new::new;
 use hashbrown::{HashMap, HashSet};
 #[cfg(feature = "debug")]
@@ -10,7 +10,7 @@ use korangar_util::collision::AABB;
 use korangar_util::math::multiply_matrix4_and_point3;
 use num::Zero;
 use ragnarok_bytes::{ByteReader, FromBytes};
-use ragnarok_formats::model::{ModelData, NodeData};
+use ragnarok_formats::model::{KeyframeData, ModelData, NodeData, RotationKeyframeData, ScaleKeyframeData, TranslationKeyframeData};
 use ragnarok_formats::version::InternalVersion;
 use smallvec::{SmallVec, smallvec};
 
@@ -199,7 +199,7 @@ impl ModelLoader {
             true => Self::calculate_matrices_rsm2(current_node),
         };
 
-        let rotation_matrix = current_node.offset_matrix;
+        let rotation_scaling_matrix = current_node.offset_matrix;
         let position = current_node.translation2.extend(0.0);
 
         let box_matrix = box_transform_matrix * main_matrix;
@@ -269,38 +269,74 @@ impl ModelLoader {
             false => animation_length,
         };
 
-        let scale_keyframes = match version.equals_or_above(2, 2) {
-            true => {
-                let mut scale_keyframes = current_node.scale_keyframes.clone();
-                for data in scale_keyframes.iter_mut() {
-                    data.frame = (data.frame as f32 * 1000.0 / frames_per_second).floor() as i32;
+        fn fix_keyframes<T>(
+            version: InternalVersion,
+            keyframes: Vec<T>,
+            animation_length: i32,
+            frames_per_second: f32,
+            default_first: T,
+            default_last: T,
+        ) -> Vec<T>
+        where
+            T: KeyframeData,
+        {
+            let mut keyframes = keyframes;
+            let mut keyframes = match version.equals_or_above(2, 2) {
+                true => {
+                    for data in keyframes.iter_mut() {
+                        data.set_frame((data.get_frame() as f32 * 1000.0 / frames_per_second).floor() as i32);
+                    }
+                    keyframes
                 }
-                scale_keyframes
+                false => keyframes,
+            };
+            if let Some(first) = keyframes.first() {
+                if first.get_frame() > 0 {
+                    keyframes.insert(0, default_first);
+                }
             }
-            false => current_node.scale_keyframes.clone(),
-        };
+            if let Some(last) = keyframes.last() {
+                if last.get_frame() < animation_length {
+                    keyframes.push(default_last);
+                }
+            }
+            keyframes
+        }
 
-        let translation_keyframes = match version.equals_or_above(2, 2) {
-            true => {
-                let mut translation_keyframes = current_node.translation_keyframes.clone();
-                for data in translation_keyframes.iter_mut() {
-                    data.frame = (data.frame as f32 * 1000.0 / frames_per_second).floor() as i32;
-                }
-                translation_keyframes
-            }
-            false => current_node.translation_keyframes.clone(),
-        };
+        let scale_keyframes = fix_keyframes(
+            version,
+            current_node.scale_keyframes.clone(),
+            animation_length as i32,
+            frames_per_second,
+            ScaleKeyframeData::new(0, Vector3::new(1.0, 1.0, 1.0), 0.0),
+            ScaleKeyframeData::new(animation_length as i32, Vector3::new(1.0, 1.0, 1.0), 0.0),
+        );
 
-        let rotation_keyframes = match version.equals_or_above(2, 2) {
-            true => {
-                let mut rotation_keyframes = current_node.rotation_keyframes.clone();
-                for data in rotation_keyframes.iter_mut() {
-                    data.frame = (data.frame as f32 * 1000.0 / frames_per_second).floor() as i32;
-                }
-                rotation_keyframes
-            }
-            false => current_node.rotation_keyframes.clone(),
-        };
+        let translation_keyframes = fix_keyframes(
+            version,
+            current_node.translation_keyframes.clone(),
+            animation_length as i32,
+            frames_per_second,
+            TranslationKeyframeData::new(0, position.truncate(), 0.0),
+            TranslationKeyframeData::new(
+                animation_length as i32,
+                current_node
+                    .translation_keyframes
+                    .last()
+                    .map(|keyframe| keyframe.translation)
+                    .unwrap_or(position.truncate()),
+                0.0,
+            ),
+        );
+
+        let rotation_keyframes = fix_keyframes(
+            version,
+            current_node.rotation_keyframes.clone(),
+            animation_length as i32,
+            frames_per_second,
+            RotationKeyframeData::new(0, Quaternion::new(1.0, 0.0, 0.0, 0.0)),
+            RotationKeyframeData::new(animation_length as i32, Quaternion::new(1.0, 0.0, 0.0, 0.0)),
+        );
 
         match bindless_support {
             BindlessSupport::Full | BindlessSupport::Limited => {
@@ -312,7 +348,7 @@ impl ModelLoader {
                 Node::new(
                     version,
                     transform_matrix,
-                    rotation_matrix.into(),
+                    rotation_scaling_matrix.into(),
                     Matrix4::identity(),
                     position,
                     centroid,
@@ -337,7 +373,7 @@ impl ModelLoader {
                 Node::new(
                     version,
                     transform_matrix,
-                    rotation_matrix.into(),
+                    rotation_scaling_matrix.into(),
                     Matrix4::identity(),
                     position,
                     centroid,
@@ -357,7 +393,7 @@ impl ModelLoader {
         is_root: bool,
         bounding_box: AABB,
         parent_matrix: &Matrix4<f32>,
-        parent_rotation_matrix: &Matrix4<f32>,
+        parent_rotation_scaling_matrix: &Matrix4<f32>,
         is_static: bool,
     ) {
         let transform_matrix = match is_root {
@@ -382,7 +418,7 @@ impl ModelLoader {
                     false => transform_matrix,
                 };
             }
-            true => node.parent_rotation_matrix = *parent_rotation_matrix,
+            true => node.parent_rotation_scaling_matrix = *parent_rotation_scaling_matrix,
         }
 
         node.child_nodes.iter_mut().for_each(|child_node| {
@@ -391,7 +427,7 @@ impl ModelLoader {
                 false,
                 bounding_box,
                 &node.transform_matrix,
-                &node.rotation_matrix,
+                &node.rotation_scaling_matrix,
                 is_static,
             );
         });
