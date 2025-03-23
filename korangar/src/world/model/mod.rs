@@ -60,6 +60,7 @@ impl Model {
                 model_matrix,
                 &Matrix4::identity(),
                 &Matrix4::identity(),
+                &Matrix4::identity(),
                 &Vector4::zero(),
                 self.is_static,
             )

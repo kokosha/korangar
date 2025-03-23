@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cgmath::{Array, EuclideanSpace, Matrix4, Point3, Quaternion, Rad, SquareMatrix, Vector2, Vector3};
+use cgmath::{Array, EuclideanSpace, InnerSpace, Matrix3, Matrix4, Point3, Quaternion, Rad, SquareMatrix, Vector2, Vector3};
 use derive_new::new;
 use hashbrown::{HashMap, HashSet};
 #[cfg(feature = "debug")]
@@ -179,6 +179,21 @@ impl ModelLoader {
         Point3::from_vec(sum / vertices.len() as f32)
     }
 
+    fn calculate_scale_and_rotation(offset_matrix: Matrix3<f32>) -> (Vector3<f32>, Matrix3<f32>) {
+        let mut offset_matrix = offset_matrix;
+
+        let scale_vector = Vector3::new(
+            offset_matrix.x.magnitude(),
+            offset_matrix.y.magnitude(),
+            offset_matrix.z.magnitude(),
+        );
+        offset_matrix.x /= scale_vector.x;
+        offset_matrix.y /= scale_vector.y;
+        offset_matrix.z /= scale_vector.z;
+        let rotation_matrix = offset_matrix;
+        return (scale_vector, rotation_matrix);
+    }
+
     fn process_node_mesh(
         bindless_support: BindlessSupport,
         version: InternalVersion,
@@ -199,7 +214,7 @@ impl ModelLoader {
             true => Self::calculate_matrices_rsm2(current_node),
         };
 
-        let rotation_scaling_matrix = current_node.offset_matrix;
+        let (scale_vector, rotation_matrix) = Self::calculate_scale_and_rotation(current_node.offset_matrix);
         let position = current_node.translation2.extend(0.0);
 
         let box_matrix = box_transform_matrix * main_matrix;
@@ -348,8 +363,10 @@ impl ModelLoader {
                 Node::new(
                     version,
                     transform_matrix,
-                    rotation_scaling_matrix.into(),
+                    rotation_matrix.into(),
                     Matrix4::identity(),
+                    scale_vector,
+                    Vector3::new(1.0, 1.0, 1.0),
                     position,
                     centroid,
                     vec![SubMesh {
@@ -373,8 +390,10 @@ impl ModelLoader {
                 Node::new(
                     version,
                     transform_matrix,
-                    rotation_scaling_matrix.into(),
+                    rotation_matrix.into(),
                     Matrix4::identity(),
+                    scale_vector,
+                    Vector3::new(1.0, 1.0, 1.0),
                     position,
                     centroid,
                     submeshes,
@@ -393,7 +412,8 @@ impl ModelLoader {
         is_root: bool,
         bounding_box: AABB,
         parent_matrix: &Matrix4<f32>,
-        parent_rotation_scaling_matrix: &Matrix4<f32>,
+        parent_rotation_matrix: &Matrix4<f32>,
+        parent_scale_vector: &Vector3<f32>,
         is_static: bool,
     ) {
         let transform_matrix = match is_root {
@@ -418,7 +438,10 @@ impl ModelLoader {
                     false => transform_matrix,
                 };
             }
-            true => node.parent_rotation_scaling_matrix = *parent_rotation_scaling_matrix,
+            true => {
+                node.parent_rotation_matrix = *parent_rotation_matrix;
+                node.parent_scale_vector = *parent_scale_vector;
+            }
         }
 
         node.child_nodes.iter_mut().for_each(|child_node| {
@@ -427,7 +450,8 @@ impl ModelLoader {
                 false,
                 bounding_box,
                 &node.transform_matrix,
-                &node.rotation_scaling_matrix,
+                &node.rotation_matrix,
+                &node.scale_vector,
                 is_static,
             );
         });
@@ -591,6 +615,7 @@ impl ModelLoader {
                 model_bounding_box,
                 &Matrix4::identity(),
                 &Matrix4::identity(),
+                &Vector3::new(1.0, 1.0, 1.0),
                 is_static,
             );
         }

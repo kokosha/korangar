@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Point3, SquareMatrix, Transform as PointTransform, Vector4, VectorSpace};
+use cgmath::{Matrix, Matrix4, Point3, SquareMatrix, Transform as PointTransform, Vector3, Vector4, VectorSpace};
 use derive_new::new;
 use korangar_interface::elements::PrototypeElement;
 use ragnarok_formats::model::{RotationKeyframeData, ScaleKeyframeData, TranslationKeyframeData};
@@ -14,9 +14,13 @@ pub struct Node {
     #[hidden_element]
     pub transform_matrix: Matrix4<f32>,
     #[hidden_element]
-    pub rotation_scaling_matrix: Matrix4<f32>,
+    pub rotation_matrix: Matrix4<f32>,
     #[hidden_element]
-    pub parent_rotation_scaling_matrix: Matrix4<f32>,
+    pub parent_rotation_matrix: Matrix4<f32>,
+    #[hidden_element]
+    pub scale_vector: Vector3<f32>,
+    #[hidden_element]
+    pub parent_scale_vector: Vector3<f32>,
     #[hidden_element]
     pub position: Vector4<f32>,
     #[hidden_element]
@@ -118,13 +122,19 @@ impl Node {
         &self,
         client_tick: ClientTick,
         parent_matrix: &Matrix4<f32>,
-        parent_rotation_scaling_matrix: &Matrix4<f32>,
+        parent_rotation_matrix: &Matrix4<f32>,
+        parent_scale_matrix: &Matrix4<f32>,
         parent_transform_matrix: &Matrix4<f32>,
         parent_vector: &Vector4<f32>,
         is_static: bool,
-    ) -> (Matrix4<f32>, Matrix4<f32>, Matrix4<f32>) {
+    ) -> (Matrix4<f32>, Matrix4<f32>, Matrix4<f32>, Matrix4<f32>) {
         match is_static {
-            true => (parent_matrix * self.transform_matrix, Matrix4::identity(), Matrix4::identity()),
+            true => (
+                parent_matrix * self.transform_matrix,
+                Matrix4::identity(),
+                Matrix4::identity(),
+                Matrix4::identity(),
+            ),
             false => match self.version.smaller(2, 2) {
                 true => {
                     let animation_scale_matrix = match self.scale_keyframes.is_empty() {
@@ -139,6 +149,7 @@ impl Node {
                         parent_matrix * self.transform_matrix * animation_rotation_matrix * animation_scale_matrix,
                         Matrix4::identity(),
                         Matrix4::identity(),
+                        Matrix4::identity(),
                     )
                 }
                 false => {
@@ -149,7 +160,7 @@ impl Node {
                     // A difference is the precomputation of the prefix multiplication of
                     // rotation matrices.
 
-                    let invert_parent_matrix = self.parent_rotation_scaling_matrix.invert().unwrap();
+                    let invert_parent_matrix = self.parent_rotation_matrix.transpose();
 
                     let animation_translate_vector = match self.translation_keyframes.is_empty() {
                         true => invert_parent_matrix * (self.position - parent_vector),
@@ -157,23 +168,27 @@ impl Node {
                     };
 
                     let animation_scale_matrix = match self.scale_keyframes.is_empty() {
-                        true => Matrix4::identity(),
+                        true => Matrix4::from_nonuniform_scale(
+                            self.scale_vector.x / self.parent_scale_vector.x,
+                            self.scale_vector.y / self.parent_scale_vector.y,
+                            self.scale_vector.z / self.parent_scale_vector.z,
+                        ),
                         false => self.scale_animation_matrix(client_tick),
                     };
 
                     let animation_rotation_matrix = match self.rotation_keyframes.is_empty() {
-                        true => invert_parent_matrix * self.rotation_scaling_matrix,
+                        true => invert_parent_matrix * self.rotation_matrix,
                         false => self.rotation_animation_matrix(client_tick),
                     };
 
-                    let current_rotation_matrix = animation_rotation_matrix * animation_scale_matrix;
-                    let prefix_rotation_matrix = parent_rotation_scaling_matrix * current_rotation_matrix;
+                    let prefix_rotation_matrix = parent_rotation_matrix * animation_rotation_matrix;
+                    let prefix_scale_matrix = parent_scale_matrix * animation_scale_matrix;
 
                     // The problem can be modeled as robotic arms.
                     // Each node is a rotary joint and the arm is the distance from one node to
                     // another node.
-                    // Rotate the rotary joint at the origin to maintain the correct angle
-                    let mut current_arm_matrix = current_rotation_matrix;
+                    // Rotate the rotary joint at the origin to maintain the correct angle1
+                    let mut current_arm_matrix = animation_rotation_matrix * prefix_scale_matrix;
 
                     // Shift from the origin by the vector arm size from the parent
                     // node to the current node. The new origin is now the
@@ -181,14 +196,19 @@ impl Node {
                     current_arm_matrix.w += animation_translate_vector;
 
                     // Rotate the rotary joint from the prefix arm to the correct angle.
-                    let mut arm_matrix = parent_rotation_scaling_matrix * current_arm_matrix;
+                    let mut arm_matrix = parent_rotation_matrix * current_arm_matrix;
 
                     // Shift the prefix length to the correct position.
                     arm_matrix.w[0] += parent_transform_matrix.w[0];
                     arm_matrix.w[1] += parent_transform_matrix.w[1];
                     arm_matrix.w[2] += parent_transform_matrix.w[2];
 
-                    (parent_matrix * arm_matrix, arm_matrix, prefix_rotation_matrix)
+                    (
+                        parent_matrix * arm_matrix,
+                        arm_matrix,
+                        prefix_rotation_matrix,
+                        prefix_scale_matrix,
+                    )
                 }
             },
         }
@@ -201,7 +221,8 @@ impl Node {
         camera: &dyn Camera,
         node_index: usize,
         parent_matrix: &Matrix4<f32>,
-        parent_rotation_scaling_matrix: &Matrix4<f32>,
+        parent_rotation_matrix: &Matrix4<f32>,
+        parent_scale_matrix: &Matrix4<f32>,
         parent_transform_matrix: &Matrix4<f32>,
         parent_vector: &Vector4<f32>,
         is_static: bool,
@@ -212,10 +233,11 @@ impl Node {
         // the nodes, so that they always have the same order from the same view
         // perspective.
         let draw_order_offset = (node_index as f32) * 1.1920929e-4_f32;
-        let (model_matrix, transform_matrix, rotation_scaling_matrix) = self.world_matrix(
+        let (model_matrix, transform_matrix, rotation_matrix, scale_matrix) = self.world_matrix(
             client_tick,
             parent_matrix,
-            parent_rotation_scaling_matrix,
+            parent_rotation_matrix,
+            parent_scale_matrix,
             parent_transform_matrix,
             parent_vector,
             is_static,
@@ -254,7 +276,8 @@ impl Node {
                 camera,
                 node_index,
                 parent_matrix,
-                &rotation_scaling_matrix,
+                &rotation_matrix,
+                &scale_matrix,
                 &transform_matrix,
                 &self.position,
                 is_static,
