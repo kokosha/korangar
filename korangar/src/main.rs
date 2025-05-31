@@ -74,8 +74,8 @@ use settings::AudioSettings;
 use wgpu::Device;
 use wgpu::util::initialize_adapter_from_env_or_default;
 use wgpu::{
-    BackendOptions, Backends, DeviceDescriptor, Dx12BackendOptions, Dx12Compiler, GlBackendOptions, Gles3MinorVersion, Instance,
-    InstanceDescriptor, InstanceFlags, MemoryHints, Queue,
+    BackendOptions, Backends, DeviceDescriptor, Dx12BackendOptions, Dx12Compiler, GlBackendOptions, Instance, InstanceDescriptor,
+    InstanceFlags, MemoryHints, NoopBackendOptions, Queue,
 };
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalSize};
@@ -332,12 +332,11 @@ impl Client {
                 backends: Backends::all().with_env(),
                 flags: InstanceFlags::from_build_config().with_env(),
                 backend_options: BackendOptions {
-                    gl: GlBackendOptions {
-                        gles_minor_version: Gles3MinorVersion::Automatic.with_env(),
-                    },
+                    gl: GlBackendOptions::default(),
                     dx12: Dx12BackendOptions {
                         shader_compiler: Dx12Compiler::StaticDxc.with_env(),
                     },
+                    noop: NoopBackendOptions::default(),
                 },
             });
 

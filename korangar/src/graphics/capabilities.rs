@@ -45,6 +45,8 @@ impl Capabilities {
 
         let mut required_limits = Limits::default().using_resolution(adapter.limits());
         required_limits.max_storage_buffer_binding_size = 268435456;
+        required_limits.max_binding_array_elements_per_shader_stage = 5000000;
+        required_limits.max_binding_array_sampler_elements_per_shader_stage = 1000;
 
         let mut capabilities = Self {
             supported_msaa,
