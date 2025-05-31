@@ -18,8 +18,9 @@ use super::error::LoadError;
 use super::{FALLBACK_MODEL_FILE, TextureSetBuilder, smooth_model_normals};
 use crate::graphics::{BindlessSupport, Color, ModelVertex, NativeModelVertex};
 use crate::loaders::GameFileLoader;
+#[cfg(feature = "debug")]
+use crate::loaders::map::assert_byte_reader_empty;
 use crate::world::{Model, Node, SubMesh};
-
 #[derive(new)]
 pub struct ModelLoader {
     game_file_loader: Arc<GameFileLoader>,
@@ -528,6 +529,8 @@ impl ModelLoader {
                 return self.load(texture_set_builder, model_vertices, FALLBACK_MODEL_FILE, reverse_order);
             }
         };
+        #[cfg(feature = "debug")]
+        assert_byte_reader_empty(byte_reader, model_file);
 
         // TODO: Temporary check until we support more versions.
         // TODO: The model operation to modify texture keyframe is not implemented yet.

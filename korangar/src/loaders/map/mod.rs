@@ -28,7 +28,7 @@ use crate::{EffectSourceExt, LightSourceExt, Map, Object, ObjectKey, SoundSource
 const MAP_OFFSET: f32 = 5.0;
 
 #[cfg(feature = "debug")]
-fn assert_byte_reader_empty<Meta>(mut byte_reader: ByteReader<Meta>, file_name: &str) {
+pub fn assert_byte_reader_empty<Meta>(mut byte_reader: ByteReader<Meta>, file_name: &str) {
     use korangar_debug::logging::{Colorize, print_debug};
 
     if !byte_reader.is_empty() {
